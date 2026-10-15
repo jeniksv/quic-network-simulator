@@ -1,1 +1,6 @@
 logs/
+benchmark/bin/
+benchmark/lib/
+benchmark/certs/
+benchmark/www/
+benchmark/manual/
