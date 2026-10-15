@@ -162,7 +162,7 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(process.returncode, 23, stdout + stderr)
             recorded = [json.loads(line) for line in args_file.read_text().splitlines()]
             self.assertEqual(len(recorded), 1)
-            self.assertEqual(recorded[0]["args"], expected)
+            self.assertEqual(recorded[0]["args"], ["-e", "stderr", *expected])
 
 
 if __name__ == "__main__":
