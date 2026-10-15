@@ -1,5 +1,5 @@
 daemon off;
-worker_processes __WORKERS__;
+worker_processes 1;
 error_log /logs/error.log warn;
 pid /tmp/nginx.pid;
 lock_file /tmp/nginx.lock;
@@ -29,7 +29,7 @@ http {
         listen 443 quic=__BACKEND__ reuseport;
         listen [::]:443 quic=__BACKEND__ reuseport;
         http3 on;
-        http3_stream_buffer_size __BUFFER__;
+        http3_stream_buffer_size 4m;
 
         quic_congestion_control __CC__;
 

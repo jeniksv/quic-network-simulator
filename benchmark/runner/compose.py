@@ -1,10 +1,44 @@
+from dataclasses import dataclass
+import os
+from pathlib import Path
 import subprocess
 
-from .config import Settings
+
+@dataclass(frozen=True)
+class DockerComposeSettings:
+    benchmark: Path
+    env: dict[str, str]
+
+    @classmethod
+    def load(cls, benchmark: Path, nginx: Path | None = None):
+        env = {}
+        for line in (benchmark / "defaults.env").read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                key, value = line.split("=", 1)
+                env[key] = value
+        env.update(os.environ)
+        if nginx is not None:
+            env["NGINX_BIN"] = str(nginx.resolve())
+        return cls(benchmark, env)
+
+    @property
+    def root(self) -> Path:
+        return self.benchmark.parent
+
+    @property
+    def nginx_binary(self) -> Path:
+        path = Path(self.env["NGINX_BIN"])
+        return path if path.is_absolute() else self.root / path
+
+    def validate(self):
+        if not os.access(self.nginx_binary, os.X_OK):
+            raise ValueError(f"Patched NGINX binary not executable: {self.nginx_binary} "
+                             "(pass --nginx PATH or set NGINX_BIN, and chmod +x).")
 
 
 class DockerCompose:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: DockerComposeSettings):
         self.settings = settings
 
     def command(self, args, *, env=None, timeout=120, check=True):

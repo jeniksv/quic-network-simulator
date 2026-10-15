@@ -8,10 +8,10 @@ import random
 import subprocess
 import uuid
 
-from .compose import DockerCompose
-from .config import NginxConfig, Settings
+from .compose import DockerCompose, DockerComposeSettings
 from .matrix import Matrix, PAYLOAD_SIZES, Trial
 from .metrics import parse_output, validate
+from .nginx import NginxConfig
 
 
 def write_json(path: Path, data):
@@ -29,9 +29,9 @@ def sha256(path: Path) -> str:
 
 
 class TrialRunner:
-    def __init__(self, settings: Settings, compose: DockerCompose, timeout: float):
+    def __init__(self, settings: DockerComposeSettings, compose: DockerCompose, timeout: float):
         self.settings, self.compose, self.timeout = settings, compose, timeout
-        self.config = NginxConfig(settings)
+        self.config = NginxConfig(settings.benchmark)
 
     def run(self, index: int, trial: Trial, directory: Path) -> dict:
         directory.mkdir()
@@ -76,7 +76,7 @@ class TrialRunner:
 
 
 class Experiment:
-    def __init__(self, settings: Settings, matrix: Matrix, compose: DockerCompose):
+    def __init__(self, settings: DockerComposeSettings, matrix: Matrix, compose: DockerCompose):
         self.settings, self.matrix, self.compose = settings, matrix, compose
 
     def prepare_inputs(self):
@@ -118,6 +118,7 @@ class Experiment:
             check=False).stdout
         images = json.loads(inspected) if inspected.strip() else []
         inputs = [settings.nginx_binary, settings.benchmark / "certs/cert.crt",
+                  settings.benchmark / "conf/nginx.conf.template",
                   *[settings.benchmark / "www" / name for name in self.payloads()]]
         hashes = {}
         for path in inputs:
@@ -132,7 +133,6 @@ class Experiment:
             "docker": {k: info.get(k) for k in ("ServerVersion", "KernelVersion", "NCPU", "MemTotal", "OSType")},
             "images": [{k: img.get(k) for k in ("Id", "RepoTags", "Created", "Architecture", "Os")} for img in images],
             "inputs": hashes,
-            "settings": {k: settings.env.get(k, "") for k in ("NGINX_WORKERS", "HTTP3_STREAM_BUFFER_SIZE")},
             "plan": self.matrix.to_list(),
         }
 

@@ -6,8 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from runner.compose import DockerCompose
-from runner.config import Settings
+from runner.compose import DockerCompose, DockerComposeSettings
 from runner.experiment import Experiment
 from runner.matrix import Matrix
 
@@ -30,7 +29,7 @@ def main(argv=None):
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
 
-    settings = Settings.load(Path(__file__).resolve().parent, nginx=args.nginx)
+    settings = DockerComposeSettings.load(Path(__file__).resolve().parent, nginx=args.nginx)
     matrix = Matrix.from_args(args, settings.benchmark / "scenarios.tsv")
 
     if args.dry_run:

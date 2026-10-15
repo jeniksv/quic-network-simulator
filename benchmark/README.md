@@ -20,12 +20,12 @@ request latency, request rate); server CPU/memory metrics are not collected yet.
 | --- | --- |
 | `run.py` | CLI entry point; selects build, dry-run or experiment execution |
 | `runner/matrix.py` | `Workload`, `Trial`, `Matrix`: workload definitions and the ordered trial plan |
-| `runner/config.py` | `Settings`, `NginxConfig`: environment settings and per-trial NGINX config |
-| `runner/compose.py` | `DockerCompose`: image builds and stack startup/shutdown |
+| `runner/compose.py` | `DockerComposeSettings`, `DockerCompose`: Compose environment, image builds and stack startup/shutdown |
+| `runner/nginx.py` | `NginxConfig`: per-trial NGINX config rendering |
 | `runner/experiment.py` | `Experiment`, `TrialRunner`: inputs, provenance, trial directories and results |
 | `runner/metrics.py` | Parses h2load's `--output-file` JSON (schema v1) |
 | `scenarios.tsv` | Named network presets → ns-3 `SCENARIO` strings |
-| `defaults.env` | Image names and default settings (also for `docker compose --env-file`) |
+| `defaults.env` | Docker Compose defaults, loaded by the runner and `docker compose --env-file` |
 | `conf/nginx.conf.template` | NGINX config template rendered by `run.py` per trial |
 | `bin/nginx` | Default location of **your** patched binary (or pass `--nginx PATH`); git-ignored |
 | `certs/`, `www/` | Generated certificate and payloads (git-ignored) |
@@ -87,11 +87,11 @@ python3 benchmark/run.py --output /abs/path/to/experiment  # must not exist
 shuffled within each scenario/workload/repetition pair using `--seed` (default 0).
 Edit `WORKLOADS` in `runner/matrix.py` and `scenarios.tsv` to change the matrix.
 
-Settings come from `defaults.env` and can be overridden via the environment:
-
-```bash
-NGINX_WORKERS=2 HTTP3_STREAM_BUFFER_SIZE=64k python3 benchmark/run.py --quick
-```
+Docker Compose settings come from `defaults.env` and can be overridden via the
+environment. The runner overrides `RUN_DIR`, `SCENARIO`, `SERVER_PARAMS` and
+`CLIENT_PARAMS` for each trial; their file defaults are for manual Compose runs.
+NGINX directives are configured in `conf/nginx.conf.template`, independently of
+the Compose environment.
 
 A prepared NGINX config can also be run by hand. Its certificate and payload
 paths must refer to `/certs` and `/www` inside the container. Include `daemon off;`
@@ -113,11 +113,12 @@ docker compose --env-file benchmark/defaults.env -f docker-compose.yml \
 `TrialRunner` creates a fresh directory for each matrix cell and repetition.
 `NginxConfig` renders `conf/nginx.conf.template` into its `server/nginx.conf`
 before starting Compose. The trial selects `listen 443 quic=<backend>` and
-`quic_congestion_control <value>;` (default cubic); `NGINX_WORKERS` and
-`HTTP3_STREAM_BUFFER_SIZE` fill the matching directives. The runner validates
-these settings before starting the benchmark. Workers default to **1**, and the
-stream buffer defaults to **4m**; verify what the buffer controls in each backend
-of your binary.
+`quic_congestion_control <value>;` (default cubic). All other directives are fixed
+in the template, including **1** worker and a **4m** stream buffer. Edit the
+template to change them; `NGINX_WORKERS` and `HTTP3_STREAM_BUFFER_SIZE` environment
+variables are no longer used. Verify what the buffer controls in each backend
+of your binary. The rendered config is saved with each trial, and the template's
+SHA-256 is recorded in the experiment metadata.
 
 The server's `SERVER_PARAMS` is a whitespace-separated list of NGINX command-line
 arguments; paths must not contain spaces. The endpoint only executes NGINX with
@@ -139,7 +140,7 @@ certificate, so do not infer TLS authentication correctness from a run.
 ## Results and metric definitions
 
 Each experiment directory has `metadata.json` (matrix, host/Docker info, base and
-checked-out commit, image IDs, SHA-256 of the binary/certificate/payloads) and an
+checked-out commit, image IDs, SHA-256 of the binary/certificate/template/payloads) and an
 atomically written `results.csv`. Every trial gets its own directory with
 `result.json`, `compose.log`, `cleanup.log`, the client's `h2load.json`, the server
 config/error log, and the simulator capture. Text output from the client
