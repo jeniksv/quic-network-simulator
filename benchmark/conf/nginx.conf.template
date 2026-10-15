@@ -1,0 +1,39 @@
+user root;
+daemon off;
+__WORKER_PROCESSES__
+
+error_log  logs/error.log  info;
+pid        logs/nginx.pid;
+
+events {
+    worker_connections 8192;
+}
+
+http {
+    default_type application/octet-stream;
+
+    access_log  logs/access.log;
+
+    sendfile on;
+
+    ssl_certificate /certs/cert.crt;
+    ssl_certificate_key /certs/cert.key;
+    ssl_protocols TLSv1.3;
+
+    server {
+        server_name server4;
+
+        __LISTEN__
+
+        http3 on;
+        __HTTP3_STREAM_BUFFER_SIZE__
+
+        __QUIC_CONGESTION_CONTROL__
+        __QUIC_PKTS_BETWEEN_PROBES__
+        __QUIC_DISCOVER_PMTU__
+        __QUIC_MAX_SEND_UDP_PAYLOAD_SIZE__
+        __QUIC_ACTIVE_CONNECTION_ID_LIMIT__
+
+        root /www;
+    }
+}

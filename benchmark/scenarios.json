@@ -1,0 +1,38 @@
+[
+  {
+    "name": "baseline",
+    "parameters": "simple-p2p --delay=15ms --bandwidth=10Mbps --queue=25"
+  },
+  {
+    "name": "high-rtt",
+    "parameters": "simple-p2p --delay=100ms --bandwidth=10Mbps --queue=67"
+  },
+  {
+    "name": "low-bandwidth",
+    "parameters": "simple-p2p --delay=50ms --bandwidth=1Mbps --queue=9"
+  },
+  {
+    "name": "high-bandwidth",
+    "parameters": "simple-p2p --delay=50ms --bandwidth=50Mbps --queue=9"
+  },
+  {
+    "name": "loss-1%",
+    "parameters": "drop-rate --delay=15ms --bandwidth=10Mbps --queue=100 --rate_to_client=1 --rate_to_server=1"
+  },
+  {
+    "name": "loss-5%",
+    "parameters": "drop-rate --delay=15ms --bandwidth=10Mbps --queue=100 --rate_to_client=5 --rate_to_server=5"
+  },
+  {
+    "name": "loss-asymmetric",
+    "parameters": "drop-rate --delay=15ms --bandwidth=10Mbps --queue=100 --rate_to_client=5 --rate_to_server=1"
+  },
+  {
+    "name": "blackhole",
+    "parameters": "blackhole --delay=15ms --bandwidth=10Mbps --queue=25 --on=10s --off=2s --repeat=3 --direction=both"
+  },
+  {
+    "name": "crosstraffic",
+    "parameters": "tcp-cross-traffic --delay=15ms --bandwidth=10Mbps --queue=25"
+  }
+]
