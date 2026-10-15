@@ -8,7 +8,7 @@ services:
     stdin_open: true
     tty: true
     volumes:
-      - ./logs/sim:/logs
+      - ${RUN_DIR}/sim:/logs
     environment:
       - SCENARIO=$SCENARIO
     cap_add: 
@@ -33,12 +33,20 @@ services:
     stdin_open: true
     tty: true
     volumes:
-      - ./logs/server:/logs
+      - ${RUN_DIR}/server:/usr/local/nginx/logs
+      - ${RUN_DIR}/conf:/usr/local/nginx/conf:ro
+      - ./benchmark/certs:/certs:ro
+      - ./benchmark/www:/www:ro
     environment:
       - ROLE=server
       - SERVER_PARAMS=$SERVER_PARAMS
     depends_on:
       - sim
+    healthcheck:
+      test: ["CMD-SHELL", "ss -H -lun 'sport = :443' | grep -q ."]
+      interval: 1s
+      timeout: 1s
+      retries: 30
     cap_add: 
       - NET_ADMIN
     networks:
@@ -59,12 +67,15 @@ services:
     stdin_open: true
     tty: true
     volumes:
-      - ./logs/client:/logs
+      - ${RUN_DIR}/client:/logs
     environment:
       - ROLE=client
       - CLIENT_PARAMS=$CLIENT_PARAMS
     depends_on:
-      - sim
+      sim:
+        condition: service_started
+      server:
+        condition: service_healthy
     cap_add: 
       - NET_ADMIN
     networks:
