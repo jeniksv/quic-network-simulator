@@ -4,3 +4,7 @@ benchmark/lib/
 benchmark/certs/
 benchmark/www/
 benchmark/manual/
+benchmark/results/
+__pycache__/
+*.pyc
+.venv/

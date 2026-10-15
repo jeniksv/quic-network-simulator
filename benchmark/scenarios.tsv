@@ -1,0 +1,7 @@
+# name          scenario; delay is one-way, queue is measured in packets
+lan             simple-p2p --delay=1ms --bandwidth=1000Mbps --queue=200
+broadband       simple-p2p --delay=25ms --bandwidth=100Mbps --queue=30
+wan             simple-p2p --delay=100ms --bandwidth=50Mbps --queue=50
+mobile          simple-p2p --delay=50ms --bandwidth=10Mbps --queue=20
+shallow-queue   simple-p2p --delay=25ms --bandwidth=100Mbps --queue=5
+crosstraffic    tcp-cross-traffic --delay=25ms --bandwidth=100Mbps --queue=30
