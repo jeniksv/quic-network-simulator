@@ -1,0 +1,6 @@
+[
+  {
+    "name": "bulk-10M",
+    "client_params": "-n30 -c1 -m1 --alpn-list=h3 https://server4/10M.bin"
+  }
+]

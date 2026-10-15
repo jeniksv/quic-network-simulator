@@ -1,0 +1,26 @@
+[
+  {
+    "name": "lan",
+    "parameters": "simple-p2p --delay=1ms --bandwidth=1000Mbps --queue=200"
+  },
+  {
+    "name": "broadband",
+    "parameters": "simple-p2p --delay=25ms --bandwidth=100Mbps --queue=30"
+  },
+  {
+    "name": "wan",
+    "parameters": "simple-p2p --delay=100ms --bandwidth=50Mbps --queue=50"
+  },
+  {
+    "name": "mobile",
+    "parameters": "simple-p2p --delay=50ms --bandwidth=10Mbps --queue=20"
+  },
+  {
+    "name": "shallow-queue",
+    "parameters": "simple-p2p --delay=25ms --bandwidth=100Mbps --queue=5"
+  },
+  {
+    "name": "crosstraffic",
+    "parameters": "tcp-cross-traffic --delay=25ms --bandwidth=100Mbps --queue=30"
+  }
+]
