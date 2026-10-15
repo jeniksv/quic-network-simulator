@@ -9,9 +9,8 @@ import subprocess
 import uuid
 
 from .compose import DockerCompose, DockerComposeSettings
-from .matrix import Matrix, PAYLOAD_SIZES, Trial
+from .matrix import BenchmarkCase, Matrix, PAYLOAD_SIZES
 from .metrics import parse_output, validate
-from .nginx import NginxConfig
 
 
 def write_json(path: Path, data):
@@ -28,21 +27,21 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-class TrialRunner:
+class CaseRunner:
     def __init__(self, settings: DockerComposeSettings, compose: DockerCompose, timeout: float):
         self.settings, self.compose, self.timeout = settings, compose, timeout
-        self.config = NginxConfig(settings.benchmark)
+        self.template = (settings.benchmark / "conf/nginx.conf.template").read_text()
 
-    def run(self, index: int, trial: Trial, directory: Path) -> dict:
+    def run(self, index: int, case: BenchmarkCase, directory: Path) -> dict:
         directory.mkdir()
         for name in ("sim", "server", "client"):
             (directory / name).mkdir()
-        self.config.write(trial, directory)
-        payload_bytes = (self.settings.benchmark / "www" / trial.payload).stat().st_size
-        env = dict(self.settings.env, RUN_DIR=str(directory), SCENARIO=trial.scenario_params,
-                   SERVER_PARAMS=self.config.server_params, CLIENT_PARAMS=trial.client_params)
-        row = dict(trial.to_dict(), index=index, status="failed", error="",
-                   client_params=trial.client_params, run_dir=directory.name,
+        case.nginx_config.write(self.template, directory)
+        payload_bytes = (self.settings.benchmark / "www" / case.payload).stat().st_size
+        env = dict(self.settings.env, RUN_DIR=str(directory), SCENARIO=case.scenario_params,
+                   SERVER_PARAMS=case.nginx_config.server_params, CLIENT_PARAMS=case.client_params)
+        row = dict(case.to_dict(), index=index, status="failed", error="",
+                   client_params=case.client_params, run_dir=directory.name,
                    started_utc=datetime.now(timezone.utc).isoformat())
         errors = []
         try:
@@ -65,7 +64,7 @@ class TrialRunner:
         try:
             result = parse_output(directory / "client/h2load.json")
             row.update(result)
-            errors.extend(validate(result, trial.n, trial.n * payload_bytes))
+            errors.extend(validate(result, case.n, case.n * payload_bytes))
         except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
             errors.append(f"metrics: {exc}")
         row["error"] = "; ".join(e for e in errors if e)
@@ -108,7 +107,7 @@ class Experiment:
             path.chmod(0o644)
 
     def payloads(self) -> list[str]:
-        return sorted({"1k.bin"} | {trial.payload for trial in self.matrix.trials})
+        return sorted({"1k.bin"} | {case.payload for case in self.matrix.cases})
 
     def provenance(self) -> dict:
         settings = self.settings
@@ -153,14 +152,14 @@ class Experiment:
         directory = (output or self.settings.benchmark / "results" / stamp).resolve()
         directory.mkdir(parents=True, exist_ok=False)
         write_json(directory / "metadata.json", dict(self.provenance(), seed=seed, timeout_s=timeout))
-        total = len(self.matrix.trials)
-        print(f"Experiment: {directory}\n{total} trials", flush=True)
-        runner, rows = TrialRunner(self.settings, self.compose, timeout), []
-        for index, trial in enumerate(self.matrix.trials, 1):
-            label = trial.label(index)
+        total = len(self.matrix.cases)
+        print(f"Experiment: {directory}\n{total} cases", flush=True)
+        runner, rows = CaseRunner(self.settings, self.compose, timeout), []
+        for index, case in enumerate(self.matrix.cases, 1):
+            label = case.label(index)
             print(f"[{index}/{total}] {label}", flush=True)
             try:
-                row = runner.run(index, trial, directory / label)
+                row = runner.run(index, case, directory / label)
             except KeyboardInterrupt:
                 print("interrupted; tearing down", flush=True)
                 self.compose.down()

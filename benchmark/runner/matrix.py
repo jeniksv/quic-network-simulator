@@ -2,6 +2,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 import random
 
+from .nginx import NginxConfig, NginxDirective
+
 
 @dataclass(frozen=True)
 class Workload:
@@ -26,7 +28,7 @@ PAYLOAD_SIZES = {"1k.bin": 1024, "100k.bin": 100 * 1024,
 
 
 @dataclass(frozen=True)
-class Trial:
+class BenchmarkCase:
     backend: str
     cc: str
     scenario: str
@@ -37,9 +39,10 @@ class Trial:
     c: int
     m: int
     payload: str
+    nginx_config: NginxConfig
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {name: value for name, value in asdict(self).items() if name != "nginx_config"}
 
     def label(self, index: int) -> str:
         return f"{index:04d}-{self.backend}-{self.scenario}-{self.workload}-r{self.repetition}"
@@ -52,7 +55,7 @@ class Trial:
 
 @dataclass(frozen=True)
 class Matrix:
-    trials: tuple[Trial, ...]
+    cases: tuple[BenchmarkCase, ...]
 
     @classmethod
     def from_args(cls, args, scenarios_file: Path):
@@ -73,20 +76,25 @@ class Matrix:
         repeats = args.repeats if args.repeats is not None else (1 if args.quick else 3)
         if repeats < 1:
             raise ValueError("--repeats must be positive")
-        rng, trials = random.Random(args.seed), []
+        rng, cases = random.Random(args.seed), []
         for repetition in range(1, repeats + 1):
             for scenario in selected_scenarios:
                 for workload in selected_workloads:
                     backends = list(dict.fromkeys(args.backend or ["nginx", "quiche"]))
                     rng.shuffle(backends)
                     for backend in backends:
-                        trials.append(Trial(
-                            backend=backend,
-                            cc=(args.quiche_cc or "cubic") if backend == "quiche" else "cubic",
+                        cc = (args.quiche_cc or "cubic") if backend == "quiche" else "cubic"
+                        nginx_config = NginxConfig((
+                            NginxDirective("listen", f"443 quic={backend} reuseport"),
+                            NginxDirective("listen", f"[::]:443 quic={backend} reuseport"),
+                            NginxDirective("quic_congestion_control", cc),
+                        ))
+                        cases.append(BenchmarkCase(
+                            backend=backend, cc=cc, nginx_config=nginx_config,
                             scenario=scenario, scenario_params=scenarios[scenario],
                             workload=workload, repetition=repetition,
                             **asdict(workloads[workload])))
-        return cls(tuple(trials))
+        return cls(tuple(cases))
 
     def to_list(self) -> list[dict]:
-        return [trial.to_dict() for trial in self.trials]
+        return [case.to_dict() for case in self.cases]

@@ -26,12 +26,11 @@ http {
     server {
         server_name server46;
 
-        listen 443 quic=__BACKEND__ reuseport;
-        listen [::]:443 quic=__BACKEND__ reuseport;
+        __LISTEN__
         http3 on;
         http3_stream_buffer_size 4m;
 
-        quic_congestion_control __CC__;
+        __QUIC_CONGESTION_CONTROL__
 
         root /www;
     }

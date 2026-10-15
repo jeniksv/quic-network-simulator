@@ -43,6 +43,7 @@ class RunnerTests(unittest.TestCase):
         self.nginx.chmod(0o755)
         shutil.copy2(BENCHMARK / "tests/fake_docker.py", binaries / "docker")
         (binaries / "docker").chmod(0o755)
+        # Legacy NGINX environment variables must not override the template.
         self.env = dict(os.environ, PATH=f"{binaries}:{os.environ['PATH']}",
                         TEST_DOCKER_CALLS=str(self.calls_file),
                         NGINX_WORKERS="2", HTTP3_STREAM_BUFFER_SIZE="64k")
@@ -86,8 +87,8 @@ class RunnerTests(unittest.TestCase):
             config = (directory / "server/nginx.conf").read_text()
             self.assertIn(f"listen 443 quic={row['backend']} reuseport;", config)
             cc = "bbr2" if row["backend"] == "quiche" else "cubic"
-            for directive in (f"quic_congestion_control {cc};", "worker_processes 2;",
-                              "http3_stream_buffer_size 64k;", "daemon off;",
+            for directive in (f"quic_congestion_control {cc};", "worker_processes 1;",
+                              "http3_stream_buffer_size 4m;", "daemon off;",
                               "error_log /logs/error.log warn;", "pid /tmp/nginx.pid;",
                               "lock_file /tmp/nginx.lock;",
                               "client_body_temp_path /tmp/client_body_temp;",
