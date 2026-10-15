@@ -12,5 +12,5 @@ if [ "$ROLE" == "client" ]; then
 
 elif [ "$ROLE" == "server" ]; then
     NGINX_BIN=/opt/nginx-bin/nginx
-    "$NGINX_BIN" ${SERVER_PARAMS}
+    "$NGINX_BIN" -e stderr ${SERVER_PARAMS}
 fi
