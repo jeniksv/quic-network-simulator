@@ -13,8 +13,6 @@ from .config import NginxConfig, Settings
 from .matrix import Matrix, PAYLOAD_SIZES, Trial
 from .metrics import parse_output, validate
 
-BASE_COMMIT = "e557a54510e3578868f8c14cf3aa37e0fc6c76d0"
-
 
 def write_json(path: Path, data):
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -128,7 +126,6 @@ class Experiment:
                 hashes[name] = {"bytes": path.stat().st_size, "sha256": sha256(path)}
         return {
             "created_utc": datetime.now(timezone.utc).isoformat(),
-            "upstream_base": BASE_COMMIT,
             "git_head": self.compose.command(["git", "rev-parse", "HEAD"], check=False).stdout.strip(),
             "git_status": self.compose.command(["git", "status", "--porcelain"], check=False).stdout,
             "host": platform.uname()._asdict(),
