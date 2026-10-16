@@ -1,0 +1,37 @@
+daemon off;
+worker_processes 1;
+error_log /logs/error.log warn;
+pid /tmp/nginx.pid;
+lock_file /tmp/nginx.lock;
+
+events {
+    worker_connections 8192;
+}
+
+http {
+    access_log off;
+    sendfile on;
+    default_type application/octet-stream;
+
+    client_body_temp_path /tmp/client_body_temp;
+    proxy_temp_path /tmp/proxy_temp;
+    fastcgi_temp_path /tmp/fastcgi_temp;
+    uwsgi_temp_path /tmp/uwsgi_temp;
+    scgi_temp_path /tmp/scgi_temp;
+
+    ssl_certificate /certs/cert.crt;
+    ssl_certificate_key /certs/cert.key;
+    ssl_protocols TLSv1.3;
+
+    server {
+        server_name server46;
+
+        __LISTEN__
+        http3 on;
+        http3_stream_buffer_size 4m;
+
+        __QUIC_CONGESTION_CONTROL__
+
+        root /www;
+    }
+}
