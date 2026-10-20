@@ -1,0 +1,42 @@
+FROM ghcr.io/rust-lang/rust:trixie AS build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        clang \
+        libclang-dev \
+        cmake \
+        libpcre2-dev \
+        zlib1g-dev
+
+WORKDIR /src
+
+ARG BORINGSSL_COMMIT=427ec40cc8edc545253289232e885708c409e5ea
+ARG NGINX_COMMIT=c78a10b198f1c8f0c32823b08aa9feb36e240e6a
+ARG QUICHE_COMMIT=7f080177f34592763de4303135369b9027d2dca5
+
+RUN git init boringssl && cd boringssl \
+ && git remote add origin https://github.com/google/boringssl.git \
+ && git fetch --depth 1 origin ${BORINGSSL_COMMIT} && git checkout --detach FETCH_HEAD \
+ && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+ && cmake --build build --target ssl crypto -j$(nproc)
+
+RUN git init nginx && cd nginx \
+ && git remote add origin https://github.com/jeniksv/nginx.git \
+ && git fetch --depth 1 origin ${NGINX_COMMIT} && git checkout --detach FETCH_HEAD
+RUN git init quiche && cd quiche \
+ && git remote add origin https://github.com/jeniksv/quiche.git \
+ && git fetch --depth 1 origin ${QUICHE_COMMIT} && git checkout --detach FETCH_HEAD
+
+ENV BORING_BSSL_PATH=/src/boringssl/build
+ENV BORING_BSSL_INCLUDE_PATH=/src/boringssl/include
+
+WORKDIR /src/nginx
+RUN ./auto/configure \
+    --with-http_v3_module \
+    --with-quiche=/src/quiche/ \
+    --with-cc-opt="-I../boringssl/include" \
+    --with-ld-opt="-L../boringssl/build -Wl,--no-as-needed -lstdc++" \
+ && make -j$(nproc) && make install
+
+
+FROM debian:trixie-slim
+COPY --from=build /usr/local/nginx/sbin/nginx /usr/local/nginx/sbin/nginx

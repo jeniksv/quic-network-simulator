@@ -1,0 +1,24 @@
+FROM nq:latest AS nginx
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        openssl \
+        perl \
+        libcryptx-perl \
+        libio-socket-ssl-perl \
+        libnet-ssleay-perl \
+        libjson-pp-perl
+
+RUN git init /nginx-tests && cd /nginx-tests \
+ && git remote add origin https://github.com/jeniksv/nginx-tests.git \
+ && git fetch --depth 1 origin jeniksv/quiche && git checkout --detach FETCH_HEAD
+
+ENV TEST_NGINX_BINARY=/usr/local/nginx/sbin/nginx
+ENV TEST_NGINX_GLOBALS="user root;"
+
+WORKDIR /nginx-tests
+
+# Run through a shell so test globs such as "h3_*.t" get expanded.
+#ENTRYPOINT [ "sh", "-c", "exec prove $@", "prove" ]
+#CMD [ "." ]
