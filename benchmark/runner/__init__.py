@@ -4,7 +4,6 @@ from .directives import (
     DIRECTIVE_TYPES,
     BackendDirective,
     CongestionControlDirective,
-    DaemonDirective,
     NginxDirective,
     QuicPktsBetweenProbesDirective,
     StreamBufferSizeDirective,

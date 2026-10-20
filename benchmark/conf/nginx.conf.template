@@ -1,4 +1,4 @@
-__DAEMON__
+daemon off;
 __WORKER_PROCESSES__
 
 error_log  logs/error.log  info;

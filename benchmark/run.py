@@ -87,7 +87,7 @@ def main():
         compose = DockerCompose(benchmark.parent / "docker-compose.yml", args.defaults)
         matrix = Matrix(configs, scenarios, compose, args.output)
 
-        #return 0 if matrix.run() else 1
+        return 0 if matrix.run() else 1
     except KeyboardInterrupt:
         print("Interrupted; see the output directory for cell logs and results.", file=sys.stderr)
         return 130

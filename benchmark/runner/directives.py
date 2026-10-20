@@ -17,11 +17,6 @@ class NginxDirective:
         return f"{self.name} {self.value};"
 
 
-class DaemonDirective(NginxDirective):
-    name = "daemon"
-    default = "on"
-
-
 class WorkerProcessesDirective(NginxDirective):
     name = "worker_processes"
     default = 1
@@ -57,7 +52,6 @@ class QuicPktsBetweenProbesDirective(NginxDirective):
 
 DIRECTIVE_TYPES = (
     BackendDirective,
-    DaemonDirective,
     WorkerProcessesDirective,
     CongestionControlDirective,
     StreamBufferSizeDirective,

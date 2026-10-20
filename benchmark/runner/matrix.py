@@ -10,10 +10,10 @@ class Matrix:
         self.configs = list(configs)
         self.scenarios = list(scenarios)
         self.cells = []
-        for row_number, config in enumerate(self.configs, 1):
+        for config in self.configs:
             row = []
-            for column_number, scenario in enumerate(self.scenarios, 1):
-                path = self.directory / f"config-{row_number:03d}" / f"scenario-{column_number:03d}"
+            for scenario in self.scenarios:
+                path = self.directory / config.name / scenario.name
                 row.append(Cell(config, scenario, path))
             self.cells.append(row)
         if not self.cells or not self.cells[0]:
