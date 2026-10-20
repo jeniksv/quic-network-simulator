@@ -20,7 +20,7 @@ http {
     ssl_protocols TLSv1.3;
 
     server {
-        server_name server46;
+        server_name server4;
 
         __LISTEN__
 
