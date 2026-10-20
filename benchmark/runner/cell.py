@@ -5,9 +5,10 @@ import time
 
 
 class Cell:
-    def __init__(self, nginx_conf, scenario, directory):
+    def __init__(self, nginx_conf, scenario, workload, directory):
         self.nginx_conf = nginx_conf
         self.scenario = scenario
+        self.workload = workload
         self.directory = Path(directory).resolve()
         self.result = None
 
@@ -19,11 +20,14 @@ class Cell:
         environment = {
             "RUN_DIR": str(self.directory),
             "SCENARIO": self.scenario.parameters,
+            "CLIENT_PARAMS": self.workload.client_params,
         }
         self.result = {
             "config": self.nginx_conf.name,
             "scenario": self.scenario.name,
             "scenario_parameters": self.scenario.parameters,
+            "workload": self.workload.name,
+            "client_params": self.workload.client_params,
             "status": "failed",
             "errors": [],
         }

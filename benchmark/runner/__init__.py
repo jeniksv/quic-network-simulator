@@ -12,3 +12,4 @@ from .directives import (
 from .matrix import Matrix
 from .nginx import NginxConf
 from .scenario import Scenario
+from .workload import Workload

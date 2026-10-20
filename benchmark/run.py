@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import sys
 
-from runner import DIRECTIVE_TYPES, DockerCompose, Matrix, NginxConf, Scenario
+from runner import DIRECTIVE_TYPES, DockerCompose, Matrix, NginxConf, Scenario, Workload
 
 
 def load_scenarios(path):
@@ -29,6 +29,37 @@ def load_scenarios(path):
         scenarios.append(Scenario(name, parameters))
 
     return scenarios
+
+
+def load_workloads(path):
+    data = json.loads(Path(path).read_text())
+
+    if not isinstance(data, list) or not data:
+        raise ValueError(f"{path}: expected a nonempty list of workloads")
+
+    names = set()
+    workloads = list()
+
+    for index, workload in enumerate(data, 1):
+        if not isinstance(workload, dict):
+            raise ValueError(f"{path}: workload {index} must be an object")
+
+        name = workload.get("name")
+        if not name:
+            raise ValueError(f"{path}: workload {index}: invalid name: {name!r}")
+
+        if name in names:
+            raise ValueError(f"{path}: duplicate workload name: {name!r}")
+
+        names.add(name)
+
+        client_params = workload.get("client_params")
+        if not client_params:
+            raise ValueError(f"{path}: {name}: missing client_params")
+
+        workloads.append(Workload(name, client_params))
+
+    return workloads
 
 
 def load_configs(path):
@@ -70,11 +101,13 @@ def load_configs(path):
 
 def main():
     benchmark = Path(__file__).resolve().parent
-    parser = argparse.ArgumentParser(description="Run NGINX configs against simulator scenarios.")
+    parser = argparse.ArgumentParser(description="Run NGINX configs against simulator scenarios and workloads.")
     parser.add_argument("--scenarios", type=Path, default=benchmark / "scenarios.tsv",
                         help="TSV file with simulator scenarios")
     parser.add_argument("--configs", type=Path, default=benchmark / "configs.json",
                         help="JSON array of NGINX configurations (one row per object)")
+    parser.add_argument("--workloads", type=Path, default=benchmark / "workloads.json",
+                        help="JSON array of h2load workloads")
     parser.add_argument("--defaults", type=Path, default=benchmark / "defaults.env")
     parser.add_argument("--output", type=Path,
                         default=benchmark / "results" / datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f"),
@@ -84,8 +117,9 @@ def main():
     try:
         scenarios = load_scenarios(args.scenarios)
         configs = load_configs(args.configs)
+        workloads = load_workloads(args.workloads)
         compose = DockerCompose(benchmark.parent / "docker-compose.yml", args.defaults)
-        matrix = Matrix(configs, scenarios, compose, args.output)
+        matrix = Matrix(configs, scenarios, workloads, compose, args.output)
 
         return 0 if matrix.run() else 1
     except KeyboardInterrupt:
