@@ -10,22 +10,31 @@ from runner import DIRECTIVE_TYPES, DockerCompose, Matrix, NginxConf, Scenario, 
 
 
 def load_scenarios(path):
-    scenarios = []
+    data = json.loads(Path(path).read_text())
+
+    if not isinstance(data, list) or not data:
+        raise ValueError(f"{path}: expected a nonempty list of scenarios")
+
     names = set()
+    scenarios = list()
 
-    for number, line in enumerate(Path(path).read_text().splitlines(), 1):
-        line = line.strip()
+    for index, scenario in enumerate(data, 1):
+        if not isinstance(scenario, dict):
+            raise ValueError(f"{path}: scenario {index} must be an object")
 
-        if not line or line.startswith("#"):
-            continue
+        name = scenario.get("name")
+        if not name:
+            raise ValueError(f"{path}: scenario {index}: invalid name: {name!r}")
 
-        fields = line.split(None, 1)
+        if name in names:
+            raise ValueError(f"{path}: duplicate scenario name: {name!r}")
 
-        if len(fields) != 2 or fields[0] in names:
-            raise ValueError(f"{path}:{number}: expected a unique name and scenario")
-
-        name, parameters = fields
         names.add(name)
+
+        parameters = scenario.get("parameters")
+        if not parameters:
+            raise ValueError(f"{path}: {name}: missing parameters")
+
         scenarios.append(Scenario(name, parameters))
 
     return scenarios
@@ -102,8 +111,8 @@ def load_configs(path):
 def main():
     benchmark = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description="Run NGINX configs against simulator scenarios and workloads.")
-    parser.add_argument("--scenarios", type=Path, default=benchmark / "scenarios.tsv",
-                        help="TSV file with simulator scenarios")
+    parser.add_argument("--scenarios", type=Path, default=benchmark / "scenarios.json",
+                        help="JSON array of simulator scenarios")
     parser.add_argument("--configs", type=Path, default=benchmark / "configs.json",
                         help="JSON array of NGINX configurations (one row per object)")
     parser.add_argument("--workloads", type=Path, default=benchmark / "workloads.json",

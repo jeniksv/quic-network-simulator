@@ -2,7 +2,7 @@
 
 The runner uses Python's standard library and the existing `docker-compose.yml`.
 The matrix has three dimensions: NGINX configurations from `configs.json`,
-network scenarios from `scenarios.tsv` and h2load workloads from `workloads.json`.
+network scenarios from `scenarios.json` and h2load workloads from `workloads.json`.
 Every combination is one cell, and every cell is one run.
 
 ## Preparation
@@ -33,17 +33,16 @@ truncate -s 10M benchmark/www/10M.bin
 
 ## Run
 
-Pass a TSV file with scenarios, a JSON file with NGINX configurations and a
-JSON file with workloads:
+Pass JSON files with scenarios, NGINX configurations and workloads:
 
 ```sh
 python3 benchmark/run.py \
-    --scenarios benchmark/scenarios.tsv \
+    --scenarios benchmark/scenarios.json \
     --configs benchmark/configs.json \
     --workloads benchmark/workloads.json
 ```
 
-`scenarios.tsv` contains one named scenario per line. `configs.json` is a JSON
+`scenarios.json` is a JSON array of named scenarios. `configs.json` is a JSON
 array where each object describes **one NGINX configuration** (one matrix row):
 
 ```json
@@ -67,9 +66,19 @@ is omitted by default. `listen` can be a JSON array to emit multiple listen
 directives **within the same configuration**; arrays are not matrix axes.
 Unknown directive names are errors. NGINX validates the generated configuration.
 
-`scenarios.tsv` only describes the simulated network (topology, delay,
-bandwidth, queue). The h2load client is described by `workloads.json`, a JSON
-array of named h2load argument strings:
+`scenarios.json` only describes the simulated network. `parameters` is passed
+to the simulator as `SCENARIO`; `--delay` is one-way and `--queue` is measured
+in packets:
+
+```json
+[
+  {"name": "lan", "parameters": "simple-p2p --delay=1ms --bandwidth=1000Mbps --queue=200"},
+  {"name": "crosstraffic", "parameters": "tcp-cross-traffic --delay=25ms --bandwidth=100Mbps --queue=30"}
+]
+```
+
+The h2load client is described by `workloads.json`, a JSON array of named
+h2load argument strings:
 
 ```json
 [
