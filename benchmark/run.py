@@ -84,7 +84,7 @@ def load_configs(path):
         if not isinstance(config, dict):
             raise ValueError(f"{path}: configuration {index} must be an object")
 
-        name = config.get("name", f"config-{index:03d}")
+        name = config.get("name", f"config-{index}")
         if not name:
             raise ValueError(f"{path}: invalid configuration name: {name!r}")
 
