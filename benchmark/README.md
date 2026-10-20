@@ -91,9 +91,9 @@ runs Compose until the client finishes. A zero process exit code alone is not
 enough: the runner also checks the request counters in `h2load.json`.
 Every response must have a 2xx status; redirects do not count as a successful
 payload benchmark.
-`--timeout` bounds validation and workload execution separately. The runner stops
-the services, collects their logs, and removes the stack even after failure,
-timeout, or Ctrl-C. A workload failure does not stop subsequent cells; a cleanup
+The runner stops
+the services, collects their logs, and removes the stack even after failure
+or Ctrl-C. A workload failure does not stop subsequent cells; a cleanup
 failure does, to avoid starting another run over a leftover stack.
 
 The CLI exits with 0 when all cells succeed, 1 on failure, or 130 on Ctrl-C.

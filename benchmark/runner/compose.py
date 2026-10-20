@@ -9,7 +9,7 @@ class DockerCompose:
         self.defaults_file = Path(defaults_file).resolve()
         self.project = f"qns-benchmark-{os.getpid()}"
 
-    def _run(self, arguments, environment, log_path, timeout):
+    def _run(self, arguments, environment, log_path):
         command = [
             "docker", "compose",
             "--file", str(self.compose_file),
@@ -22,31 +22,31 @@ class DockerCompose:
             return subprocess.run(
                 command, cwd=self.compose_file.parent, env=env,
                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-                timeout=timeout, check=True,
+                check=True,
             )
 
-    def validate(self, environment, directory, timeout):
+    def validate(self, environment, directory):
         self._run([
             "run", "--rm", "--no-deps", "-T",
             "--entrypoint", "/usr/local/nginx/sbin/nginx", "server",
             "-t", "-e", "stderr", "-c", "/usr/local/nginx/conf/nginx.conf",
-        ], environment, directory / "nginx-test.log", timeout)
+        ], environment, directory / "nginx-test.log")
 
-    def up(self, environment, directory, timeout):
+    def up(self, environment, directory):
         self._run([
             "up", "--no-build", "--abort-on-container-exit",
             "--exit-code-from", "client",
-        ], environment, directory / "compose.log", timeout)
+        ], environment, directory / "compose.log")
 
     def stop(self, environment, directory):
-        self._run(["stop", "--timeout", "5"], environment, directory / "compose.log", 30)
+        self._run(["stop", "--timeout", "5"], environment, directory / "compose.log")
 
     def logs(self, service, environment, directory):
         self._run([
             "logs", "--no-color", "--no-log-prefix", service,
-        ], environment, directory / service / "console.log", 30)
+        ], environment, directory / service / "console.log")
 
     def down(self, environment, directory):
         # Include a validation container left behind by an interrupted `run`.
         self._run(["down", "--remove-orphans", "--timeout", "5"],
-                  environment, directory / "compose.log", 30)
+                  environment, directory / "compose.log")

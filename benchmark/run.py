@@ -6,7 +6,29 @@ import json
 from pathlib import Path
 import sys
 
-from runner import DIRECTIVE_TYPES, DockerCompose, Matrix, NginxConf, load_scenarios
+from runner import DIRECTIVE_TYPES, DockerCompose, Matrix, NginxConf, Scenario
+
+
+def load_scenarios(path):
+    scenarios = []
+    names = set()
+
+    for number, line in enumerate(Path(path).read_text().splitlines(), 1):
+        line = line.strip()
+
+        if not line or line.startswith("#"):
+            continue
+
+        fields = line.split(None, 1)
+
+        if len(fields) != 2 or fields[0] in names:
+            raise ValueError(f"{path}:{number}: expected a unique name and scenario")
+
+        name, parameters = fields
+        names.add(name)
+        scenarios.append(Scenario(name, parameters))
+
+    return scenarios
 
 
 def load_configs(path):
@@ -41,7 +63,6 @@ def load_configs(path):
             else:
                 raise ValueError(f"{path}: {name}: missing required directive {directive_type.name}")
 
-        print(directives)
         configs.append(NginxConf(name, directives))
 
     return configs
@@ -58,11 +79,7 @@ def main():
     parser.add_argument("--output", type=Path,
                         default=benchmark / "results" / datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f"),
                         help="New output directory; existing directories are never overwritten")
-    parser.add_argument("--timeout", type=float, default=300,
-                        help="Timeout in seconds for validation and for each workload (default: 300)")
     args = parser.parse_args()
-    if args.timeout <= 0:
-        parser.error("--timeout must be positive")
 
     try:
         scenarios = load_scenarios(args.scenarios)
@@ -70,7 +87,7 @@ def main():
         compose = DockerCompose(benchmark.parent / "docker-compose.yml", args.defaults)
         matrix = Matrix(configs, scenarios, compose, args.output)
 
-        #return 0 if matrix.run(args.timeout) else 1
+        #return 0 if matrix.run() else 1
     except KeyboardInterrupt:
         print("Interrupted; see the output directory for cell logs and results.", file=sys.stderr)
         return 130

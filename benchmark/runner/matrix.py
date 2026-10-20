@@ -19,7 +19,7 @@ class Matrix:
         if not self.cells or not self.cells[0]:
             raise ValueError("Matrix needs at least one config and one scenario")
 
-    def run(self, timeout=300):
+    def run(self):
         self.directory.mkdir(parents=True, exist_ok=False)
         total = sum(len(row) for row in self.cells)
         number = 0
@@ -28,7 +28,7 @@ class Matrix:
             for cell in row:
                 number += 1
                 print(f"[{number}/{total}] {cell.nginx_conf.name} / {cell.scenario.name}", flush=True)
-                if not cell.run(self.compose, timeout):
+                if not cell.run(self.compose):
                     success = False
                 print(f"  {cell.result['status']}: {cell.directory}", flush=True)
         return success

@@ -12,4 +12,4 @@ from .directives import (
 )
 from .matrix import Matrix
 from .nginx import NginxConf
-from .scenario import Scenario, load_scenarios
+from .scenario import Scenario

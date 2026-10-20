@@ -11,7 +11,7 @@ class Cell:
         self.directory = Path(directory).resolve()
         self.result = None
 
-    def run(self, compose, timeout=300):
+    def run(self, compose):
         self.directory.mkdir(parents=True, exist_ok=False)
         for name in ("conf", "client", "sim", "server"):
             (self.directory / name).mkdir()
@@ -31,8 +31,8 @@ class Cell:
         cleanup_failed = False
         try:
             self.nginx_conf.write(self.directory / "conf/nginx.conf")
-            compose.validate(environment, self.directory, timeout)
-            compose.up(environment, self.directory, timeout)
+            compose.validate(environment, self.directory)
+            compose.up(environment, self.directory)
 
             data = json.loads((self.directory / "client/h2load.json").read_text())
             measurements = data["measurements"]
@@ -48,9 +48,6 @@ class Cell:
             self.result["status"] = "ok"
         except KeyboardInterrupt:
             self.result["status"] = "interrupted"
-        except subprocess.TimeoutExpired:
-            self.result["status"] = "timeout"
-            self.result["errors"].append(f"Command exceeded {timeout} seconds")
         except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
             self.result["errors"].append(str(error))
         finally:
