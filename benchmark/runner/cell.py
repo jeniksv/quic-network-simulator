@@ -6,10 +6,11 @@ SERVICES = ("client", "sim", "server")
 
 
 class Cell:
-    def __init__(self, nginx_conf, scenario, workload, directory):
+    def __init__(self, nginx_conf, scenario, workload, repetition, directory):
         self.nginx_conf = nginx_conf
         self.scenario = scenario
         self.workload = workload
+        self.repetition = repetition
         self.directory = Path(directory).resolve()
         self.result = None
 
@@ -29,6 +30,7 @@ class Cell:
             "scenario_parameters": self.scenario.parameters,
             "workload": self.workload.name,
             "client_params": self.workload.client_params,
+            "repetition": self.repetition,
             "status": "failed",
             "errors": [],
         }
