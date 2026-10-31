@@ -50,6 +50,8 @@ def main():
                         help="JSON array of h2load workloads")
     parser.add_argument("--repetitions", type=int, default=1,
                         help="How many times every cell runs (default: 1)")
+    parser.add_argument("--seed", type=int,
+                        help="Seed of the random order of configurations (default: random)")
     parser.add_argument("--defaults", type=Path, default=benchmark / "defaults.env")
     parser.add_argument("--output", type=Path,
                         default=benchmark / "results" / datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f"),
@@ -64,7 +66,7 @@ def main():
         workloads = [Workload(name, entry["client_params"])
                      for name, entry in load(args.workloads, "workload", "client_params")]
         compose = DockerCompose(benchmark.parent / "docker-compose.yml", args.defaults)
-        matrix = Matrix(configs, scenarios, workloads, compose, args.output, args.repetitions)
+        matrix = Matrix(configs, scenarios, workloads, compose, args.output, args.repetitions, args.seed)
 
         return 0 if matrix.run() else 1
     except KeyboardInterrupt:

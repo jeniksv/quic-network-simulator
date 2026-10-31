@@ -98,6 +98,15 @@ options default to the files in `benchmark/`.
 `--repetitions` sets how many times every cell runs (default: 1). The whole
 matrix runs once before the next repetition starts, so slow changes on the host
 are spread across all cells instead of affecting a single configuration.
+Within a repetition, scenarios and workloads keep the order of the input files.
+For each of their combinations, all configurations run one after another, each
+time in a new random order, so compared configurations run close together in
+time and none of them always runs first.
+
+`--seed` sets the seed of the random order; by default a random seed is chosen.
+The runner prints the seed and stores it in every `result.json` together with
+`run_order`, the position of the run in the matrix (from 1). The same seed with
+the same input files and number of repetitions gives the same order.
 
 `--output` specifies a new directory; otherwise a timestamped directory is
 created under `benchmark/results`. Existing output directories are never reused.
@@ -115,7 +124,7 @@ named after the entries in the input files and numbered from `r1`, containing:
 | `server/access.log`, `server/error.log` | NGINX logs |
 | `nginx-test.log` | Configuration validation output |
 | `compose.log` | Compose startup and shutdown output |
-| `result.json` | Configuration, scenario and workload names, scenario and client parameters, repetition number, status and errors |
+| `result.json` | Configuration, scenario and workload names, scenario and client parameters, repetition number, run order, seed, status and errors |
 
 The runner computes no statistics and does not copy the measurements:
 `client/h2load.json` is their only copy, and `result.json` records only what
@@ -138,8 +147,9 @@ The CLI exits with 0 when all runs succeed, 1 on failure, or 130 on Ctrl-C.
 `runner` is an ordinary Python package in `benchmark/runner`. `run.py` parses
 the input files, creates `NginxConf`, `Scenario` and `Workload` objects, and
 passes them to `Matrix`, which creates one `Cell` per combination and
-repetition. `Matrix.run()` invokes `Cell.run(compose)` for each of them, which
-writes its `result.json`. `DockerCompose` wraps the Compose CLI.
+repetition, in the order in which they run. `Matrix.run()` invokes
+`Cell.run(compose)` for each of them, which writes its `result.json`.
+`DockerCompose` wraps the Compose CLI.
 
 `NginxConf` resolves every directive from its configuration object or default,
 and fills the directive placeholders in the unchanged

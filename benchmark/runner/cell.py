@@ -6,11 +6,13 @@ SERVICES = ("client", "sim", "server")
 
 
 class Cell:
-    def __init__(self, nginx_conf, scenario, workload, repetition, directory):
+    def __init__(self, nginx_conf, scenario, workload, repetition, run_order, seed, directory):
         self.nginx_conf = nginx_conf
         self.scenario = scenario
         self.workload = workload
         self.repetition = repetition
+        self.run_order = run_order
+        self.seed = seed
         self.directory = Path(directory).resolve()
         self.result = None
 
@@ -31,6 +33,8 @@ class Cell:
             "workload": self.workload.name,
             "client_params": self.workload.client_params,
             "repetition": self.repetition,
+            "run_order": self.run_order,
+            "seed": self.seed,
             "status": "failed",
             "errors": [],
         }
