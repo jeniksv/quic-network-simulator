@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cerrno>
+#include <climits>
 #include <csignal>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +22,14 @@
 
 using namespace ns3;
 
+// ns-3 reads eth0 and eth1 from raw packet sockets. By default, their receive
+// buffer is net.core.rmem_default, which overflows when the reader thread
+// stalls at high packet rates. The sysctl cannot be set per container.
+static GlobalValue g_rawSocketRcvBuf(
+    "RawSocketRcvBuf",
+    "Receive buffer of the raw sockets for eth0 and eth1 in bytes, 0 keeps the kernel default",
+    UintegerValue(512 * 1024), MakeUintegerChecker<uint32_t>(0, INT_MAX));
+
 // A packet dropped by the kernel before ns-3 read it is a loss the model does
 // not know about, so abort the simulation, like the realtime HardLimit does.
 static GlobalValue g_rawSocketDropCheck(
@@ -36,6 +45,13 @@ class RawSocketEmuFdNetDeviceHelper : public EmuFdNetDeviceHelper {
  protected:
   int CreateFileDescriptor() const override {
     int fd = EmuFdNetDeviceHelper::CreateFileDescriptor();
+    UintegerValue value;
+    g_rawSocketRcvBuf.GetValue(value);
+    int size = value.Get();
+    // SO_RCVBUFFORCE requires CAP_NET_ADMIN and ignores net.core.rmem_max.
+    if (size > 0 && setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &size, sizeof(size)) < 0) {
+      NS_FATAL_ERROR("setsockopt(SO_RCVBUFFORCE) failed: " << strerror(errno));
+    }
     g_rawSockets.emplace_back(m_deviceName, fd);
     return fd;
   }
