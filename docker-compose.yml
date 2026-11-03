@@ -2,7 +2,8 @@ version: "3.5"
 
 services:
   sim:
-    image: martenseemann/quic-network-simulator
+    build: ./sim
+    image: qns-sim:local
     container_name: sim
     hostname: sim
     stdin_open: true
