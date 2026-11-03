@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cerrno>
 #include <csignal>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,7 +16,42 @@
 #include "ns3/internet-module.h"
 #include "quic-network-simulator-helper.h"
 
+// After the ns-3 headers: its PACKET_* macros clash with NetDevice::PacketType.
+#include <linux/if_packet.h>
+
 using namespace ns3;
+
+// A packet dropped by the kernel before ns-3 read it is a loss the model does
+// not know about, so abort the simulation, like the realtime HardLimit does.
+static GlobalValue g_rawSocketDropCheck(
+    "RawSocketDropCheck",
+    "Interval of checking the raw sockets for eth0 and eth1 for dropped packets; "
+    "the simulation aborts on the first drop, 0 disables the check",
+    TimeValue(MilliSeconds(100)), MakeTimeChecker());
+
+static std::vector<std::pair<std::string, int>> g_rawSockets;
+
+// Registers the raw socket that EmuFdNetDeviceHelper creates for the device.
+class RawSocketEmuFdNetDeviceHelper : public EmuFdNetDeviceHelper {
+ protected:
+  int CreateFileDescriptor() const override {
+    int fd = EmuFdNetDeviceHelper::CreateFileDescriptor();
+    g_rawSockets.emplace_back(m_deviceName, fd);
+    return fd;
+  }
+};
+
+void checkRawSocketDrops(Time interval) {
+  for (const auto& [deviceName, fd] : g_rawSockets) {
+    // Reading the statistics resets them, so each check covers the last interval.
+    tpacket_stats stats{};
+    socklen_t length = sizeof(stats);
+    int res = getsockopt(fd, SOL_PACKET, PACKET_STATISTICS, &stats, &length);
+    NS_ABORT_MSG_IF(res < 0, "getsockopt(PACKET_STATISTICS) failed for " << deviceName << ": " << strerror(errno));
+    NS_ABORT_MSG_IF(stats.tp_drops > 0, "Raw socket for " << deviceName << " dropped " << stats.tp_drops << " packets");
+  }
+  Simulator::Schedule(interval, &checkRawSocketDrops, interval);
+}
 
 void onSignal(int signum) {
   std::cout << "Received signal: " << signum << std::endl;
@@ -25,7 +61,7 @@ void onSignal(int signum) {
 }
 
 void installNetDevice(Ptr<Node> node, std::string deviceName, Mac48AddressValue macAddress, Ipv4InterfaceAddress ipv4Address, Ipv6InterfaceAddress ipv6Address) {
-  EmuFdNetDeviceHelper emu;
+  RawSocketEmuFdNetDeviceHelper emu;
   emu.SetDeviceName(deviceName);
   NetDeviceContainer devices = emu.Install(node);
   Ptr<NetDevice> device = devices.Get(0);
@@ -109,6 +145,13 @@ void QuicNetworkSimulatorHelper::Run(Time duration) {
   Ptr<OutputStreamWrapper> routingStream = Create<OutputStreamWrapper>("dynamic-global-routing.routes", std::ios::out);
   Ipv4RoutingHelper::PrintRoutingTableAllAt(Seconds(0.), routingStream);
   Ipv6RoutingHelper::PrintRoutingTableAllAt(Seconds(0.), routingStream);
+
+  TimeValue dropCheck;
+  g_rawSocketDropCheck.GetValue(dropCheck);
+  Time interval = dropCheck.Get();
+  if (interval.IsStrictlyPositive()) {
+    Simulator::Schedule(interval, &checkRawSocketDrops, interval);
+  }
 
   Simulator::Stop(duration);
   RunSynchronizer();
