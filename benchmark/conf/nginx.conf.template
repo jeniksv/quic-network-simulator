@@ -1,3 +1,4 @@
+user root;
 daemon off;
 __WORKER_PROCESSES__
 
