@@ -22,9 +22,13 @@ fi
 
 echo "Using scenario:" $SCENARIO
 
-dumpcap -i eth0 -s 0 -w - > "/logs/trace_node_left.pcap" &
-dumpcap -i eth1 -s 0 -w - > "/logs/trace_node_right.pcap" &
-eval ./scratch/"$SCENARIO &"
+if [[ "$CAPTURE" == 1 ]]; then
+  dumpcap -i eth0 -s 0 -w - > "/logs/trace_node_left.pcap" &
+  dumpcap -i eth1 -s 0 -w - > "/logs/trace_node_right.pcap" &
+  eval ./scratch/"$SCENARIO &"
+else
+  eval ./scratch/"$SCENARIO >/dev/null &"
+fi
 
 PID=`jobs -p | tr '\n' ' '`
 trap "kill -SIGINT $PID" INT
