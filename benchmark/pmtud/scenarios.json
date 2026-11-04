@@ -1,0 +1,6 @@
+[
+  {
+    "name": "lossy-wan",
+    "parameters": "drop-rate --delay=50ms --bandwidth=100Mbps --queue=833 --rate_to_client=2 --rate_to_server=2"
+  }
+]

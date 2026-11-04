@@ -1,1 +1,12 @@
 logs/
+benchmark/bin/
+benchmark/lib/
+benchmark/certs/
+benchmark/www/
+benchmark/results/
+benchmark/example/sim
+benchmark/example/server
+benchmark/example/client
+__pycache__/
+*.pyc
+.venv/
