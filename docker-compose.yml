@@ -11,7 +11,7 @@ services:
     volumes:
       - ${RUN_DIR}/sim:/logs
     environment:
-      - SCENARIO=$SCENARIO
+      - "SCENARIO=$SCENARIO --ns3::ArpCache::PendingQueueSize=10000"
       - CAPTURE=$CAPTURE
     cap_add: 
       - NET_ADMIN
