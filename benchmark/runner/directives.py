@@ -47,10 +47,22 @@ class QuicPktsBetweenProbesDirective(NginxDirective):
     optional = True
 
 
+class DiscoverPmtuDirective(NginxDirective):
+    name = "quic_discover_pmtu"
+    optional = True
+
+
+class MaxSendUdpPayloadSizeDirective(NginxDirective):
+    name = "quic_max_send_udp_payload_size"
+    optional = True
+
+
 DIRECTIVE_TYPES = (
     BackendDirective,
     WorkerProcessesDirective,
     CongestionControlDirective,
     StreamBufferSizeDirective,
     QuicPktsBetweenProbesDirective,
+    DiscoverPmtuDirective,
+    MaxSendUdpPayloadSizeDirective,
 )

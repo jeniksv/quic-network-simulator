@@ -30,6 +30,8 @@ http {
 
         __QUIC_CONGESTION_CONTROL__
         __QUIC_PKTS_BETWEEN_PROBES__
+        __QUIC_DISCOVER_PMTU__
+        __QUIC_MAX_SEND_UDP_PAYLOAD_SIZE__
 
         root /www;
     }
