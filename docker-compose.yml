@@ -12,6 +12,7 @@ services:
       - ${RUN_DIR}/sim:/logs
     environment:
       - SCENARIO=$SCENARIO
+      - CAPTURE=${CAPTURE:-1}
     cap_add: 
       - NET_ADMIN
     expose:

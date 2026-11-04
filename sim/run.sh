@@ -22,8 +22,11 @@ fi
 
 echo "Using scenario:" $SCENARIO
 
-dumpcap -i eth0 -s 0 -w - > "/logs/trace_node_left.pcap" &
-dumpcap -i eth1 -s 0 -w - > "/logs/trace_node_right.pcap" &
+# CAPTURE=0 disables the packet traces, e.g. to measure the simulator without dumpcap.
+if [[ "${CAPTURE:-1}" != 0 ]]; then
+  dumpcap -i eth0 -s 0 -w - > "/logs/trace_node_left.pcap" &
+  dumpcap -i eth1 -s 0 -w - > "/logs/trace_node_right.pcap" &
+fi
 eval ./scratch/"$SCENARIO &"
 
 PID=`jobs -p | tr '\n' ' '`
