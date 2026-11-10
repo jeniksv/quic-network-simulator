@@ -6,6 +6,7 @@ services:
     image: qns-sim:local
     container_name: sim
     hostname: sim
+    cpuset: ${SIM_CPUS}
     stdin_open: true
     tty: true
     volumes:
@@ -32,6 +33,7 @@ services:
     image: $SERVER
     container_name: server
     hostname: server
+    cpuset: ${SERVER_CPUS}
     stdin_open: true
     tty: true
     volumes:
@@ -68,6 +70,7 @@ services:
     image: $CLIENT
     container_name: client
     hostname: client
+    cpuset: ${CLIENT_CPUS}
     stdin_open: true
     tty: true
     volumes:
