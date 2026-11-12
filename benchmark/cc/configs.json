@@ -1,0 +1,18 @@
+[
+  {
+    "name": "nginx",
+    "backend": "nginx"
+  },
+  {
+    "name": "quiche_cubic",
+    "backend": "quiche",
+    "quic_congestion_control": "cubic",
+    "quic_max_send_udp_payload_size": 1472
+  },
+  {
+    "name": "quiche_bbr2",
+    "backend": "quiche",
+    "quic_congestion_control": "bbr2",
+    "quic_max_send_udp_payload_size": 1472
+  }
+]
