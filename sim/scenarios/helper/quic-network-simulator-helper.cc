@@ -1,3 +1,4 @@
+#include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <csignal>
@@ -53,11 +54,25 @@ void checkRawSocketDrops(Time interval) {
   Simulator::Schedule(interval, &checkRawSocketDrops, interval);
 }
 
-void onSignal(int signum) {
-  std::cout << "Received signal: " << signum << std::endl;
-  // see https://gitlab.com/nsnam/ns-3-dev/issues/102
-  Simulator::Stop();
-  NS_FATAL_ERROR(signum);
+// Set by the handler of SIGTERM and SIGINT. A lock-free atomic is safe to set
+// in a signal handler and the simulator thread sees it even if the signal is
+// handled on one of the reader threads of the FdNetDevices.
+static std::atomic<bool> g_stopRequested{false};
+static_assert(std::atomic<bool>::is_always_lock_free);
+
+void onSignal(int) {
+  // Simulator::Stop() does not stop the realtime simulator from a signal
+  // handler (https://gitlab.com/nsnam/ns-3-dev/issues/102). Only record the
+  // request, checkStopRequested() stops the simulator from its own thread.
+  g_stopRequested = true;
+}
+
+void checkStopRequested(Time interval) {
+  if (g_stopRequested) {
+    Simulator::Stop();
+    return;
+  }
+  Simulator::Schedule(interval, &checkStopRequested, interval);
 }
 
 void installNetDevice(Ptr<Node> node, std::string deviceName, Mac48AddressValue macAddress, Ipv4InterfaceAddress ipv4Address, Ipv6InterfaceAddress ipv6Address) {
@@ -152,6 +167,11 @@ void QuicNetworkSimulatorHelper::Run(Time duration) {
   if (interval.IsStrictlyPositive()) {
     Simulator::Schedule(interval, &checkRawSocketDrops, interval);
   }
+
+  // A signal stops the simulation within this interval, Simulator::Run()
+  // returns and the code after it runs.
+  Time stopCheck = MilliSeconds(100);
+  Simulator::Schedule(stopCheck, &checkStopRequested, stopCheck);
 
   Simulator::Stop(duration);
   RunSynchronizer();
