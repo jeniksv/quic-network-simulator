@@ -22,12 +22,24 @@ fi
 
 echo "Using scenario:" $SCENARIO
 
-dumpcap -i eth0 -s 0 -w "/logs/trace_node_left.pcap" &
-dumpcap -i eth1 -s 0 -w "/logs/trace_node_right.pcap" &
-eval ./scratch/"$SCENARIO &"
+# We do not want core dumps of the scenario.
+ulimit -c 0
+
+if [[ "$CAPTURE" == 1 ]]; then
+  dumpcap -i eth0 -s 0 -w - > "/logs/trace_node_left.pcap" &
+  dumpcap -i eth1 -s 0 -w - > "/logs/trace_node_right.pcap" &
+  eval ./scratch/"$SCENARIO &"
+else
+  eval ./scratch/"$SCENARIO >/dev/null &"
+fi
+SIM=$!
 
 PID=`jobs -p | tr '\n' ' '`
 trap "kill -SIGINT $PID" INT
 trap "kill -SIGTERM $PID" TERM
 trap "kill -SIGKILL $PID" KILL
+
+until wait $SIM; status=$?; ! kill -0 $SIM 2>/dev/null; do :; done
+kill -SIGTERM $PID 2>/dev/null || true
 wait
+exit $status

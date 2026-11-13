@@ -1,4 +1,7 @@
+#include <atomic>
 #include <cassert>
+#include <cerrno>
+#include <climits>
 #include <csignal>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,17 +18,81 @@
 #include "ns3/internet-module.h"
 #include "quic-network-simulator-helper.h"
 
+// After the ns-3 headers: its PACKET_* macros clash with NetDevice::PacketType.
+#include <linux/if_packet.h>
+
 using namespace ns3;
 
-void onSignal(int signum) {
-  std::cout << "Received signal: " << signum << std::endl;
-  // see https://gitlab.com/nsnam/ns-3-dev/issues/102
-  Simulator::Stop();
-  NS_FATAL_ERROR(signum);
+// ns-3 reads eth0 and eth1 from raw packet sockets. By default, their receive
+// buffer is net.core.rmem_default, which overflows when the reader thread
+// stalls at high packet rates. The sysctl cannot be set per container.
+static GlobalValue g_rawSocketRcvBuf(
+    "RawSocketRcvBuf",
+    "Receive buffer of the raw sockets for eth0 and eth1 in bytes, 0 keeps the kernel default",
+    UintegerValue(512 * 1024), MakeUintegerChecker<uint32_t>(0, INT_MAX));
+
+// A packet dropped by the kernel before ns-3 read it is a loss the model does
+// not know about, so abort the simulation, like the realtime HardLimit does.
+static GlobalValue g_rawSocketDropCheck(
+    "RawSocketDropCheck",
+    "Interval of checking the raw sockets for eth0 and eth1 for dropped packets; "
+    "the simulation aborts on the first drop, 0 disables the check",
+    TimeValue(MilliSeconds(100)), MakeTimeChecker());
+
+static std::vector<std::pair<std::string, int>> g_rawSockets;
+
+// Registers the raw socket that EmuFdNetDeviceHelper creates for the device.
+class RawSocketEmuFdNetDeviceHelper : public EmuFdNetDeviceHelper {
+ protected:
+  int CreateFileDescriptor() const override {
+    int fd = EmuFdNetDeviceHelper::CreateFileDescriptor();
+    UintegerValue value;
+    g_rawSocketRcvBuf.GetValue(value);
+    int size = value.Get();
+    // SO_RCVBUFFORCE requires CAP_NET_ADMIN and ignores net.core.rmem_max.
+    if (size > 0 && setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &size, sizeof(size)) < 0) {
+      NS_FATAL_ERROR("setsockopt(SO_RCVBUFFORCE) failed: " << strerror(errno));
+    }
+    g_rawSockets.emplace_back(m_deviceName, fd);
+    return fd;
+  }
+};
+
+void checkRawSocketDrops(Time interval) {
+  for (const auto& [deviceName, fd] : g_rawSockets) {
+    // Reading the statistics resets them, so each check covers the last interval.
+    tpacket_stats stats{};
+    socklen_t length = sizeof(stats);
+    int res = getsockopt(fd, SOL_PACKET, PACKET_STATISTICS, &stats, &length);
+    NS_ABORT_MSG_IF(res < 0, "getsockopt(PACKET_STATISTICS) failed for " << deviceName << ": " << strerror(errno));
+    NS_ABORT_MSG_IF(stats.tp_drops > 0, "Raw socket for " << deviceName << " dropped " << stats.tp_drops << " packets");
+  }
+  Simulator::Schedule(interval, &checkRawSocketDrops, interval);
+}
+
+// Set by the handler of SIGTERM and SIGINT. A lock-free atomic is safe to set
+// in a signal handler and the simulator thread sees it even if the signal is
+// handled on one of the reader threads of the FdNetDevices.
+static std::atomic<bool> g_stopRequested{false};
+static_assert(std::atomic<bool>::is_always_lock_free);
+
+void onSignal(int) {
+  // Simulator::Stop() does not stop the realtime simulator from a signal
+  // handler (https://gitlab.com/nsnam/ns-3-dev/issues/102). Only record the
+  // request, checkStopRequested() stops the simulator from its own thread.
+  g_stopRequested = true;
+}
+
+void checkStopRequested(Time interval) {
+  if (g_stopRequested) {
+    Simulator::Stop();
+    return;
+  }
+  Simulator::Schedule(interval, &checkStopRequested, interval);
 }
 
 void installNetDevice(Ptr<Node> node, std::string deviceName, Mac48AddressValue macAddress, Ipv4InterfaceAddress ipv4Address, Ipv6InterfaceAddress ipv6Address) {
-  EmuFdNetDeviceHelper emu;
+  RawSocketEmuFdNetDeviceHelper emu;
   emu.SetDeviceName(deviceName);
   NetDeviceContainer devices = emu.Install(node);
   Ptr<NetDevice> device = devices.Get(0);
@@ -109,6 +176,18 @@ void QuicNetworkSimulatorHelper::Run(Time duration) {
   Ptr<OutputStreamWrapper> routingStream = Create<OutputStreamWrapper>("dynamic-global-routing.routes", std::ios::out);
   Ipv4RoutingHelper::PrintRoutingTableAllAt(Seconds(0.), routingStream);
   Ipv6RoutingHelper::PrintRoutingTableAllAt(Seconds(0.), routingStream);
+
+  TimeValue dropCheck;
+  g_rawSocketDropCheck.GetValue(dropCheck);
+  Time interval = dropCheck.Get();
+  if (interval.IsStrictlyPositive()) {
+    Simulator::Schedule(interval, &checkRawSocketDrops, interval);
+  }
+
+  // A signal stops the simulation within this interval, Simulator::Run()
+  // returns and the code after it runs.
+  Time stopCheck = MilliSeconds(100);
+  Simulator::Schedule(stopCheck, &checkStopRequested, stopCheck);
 
   Simulator::Stop(duration);
   RunSynchronizer();

@@ -8,8 +8,8 @@ performs when competing against a TCP flow at the bottleneck. This scenario is
 most useful with large transfers, for comparing long-term bandwidth sharing and
 for looking into flow dynamics when competing.
 
-Note that this TCP is a native implementation within ns-3 and uses Reno
-congestion control.
+Note that this TCP is a native implementation within ns-3 and uses the ns-3
+default congestion control, CUBIC (`ns3::TcpCubic`).
 
 The simulator prints the bandwidth seen by the receiving TCP application over
 5-second intervals.

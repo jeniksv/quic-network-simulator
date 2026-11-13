@@ -2,15 +2,18 @@ version: "3.5"
 
 services:
   sim:
-    image: martenseemann/quic-network-simulator
+    build: ./sim
+    image: qns-sim:local
     container_name: sim
     hostname: sim
+    cpuset: ${SIM_CPUS}
     stdin_open: true
     tty: true
     volumes:
-      - ./logs/sim:/logs
+      - ${RUN_DIR}/sim:/logs
     environment:
-      - SCENARIO=$SCENARIO
+      - "SCENARIO=$SCENARIO --ns3::ArpCache::PendingQueueSize=10000 --ns3::RealtimeSimulatorImpl::SynchronizationMode=HardLimit --ns3::RealtimeSimulatorImpl::HardLimit=$HARD_LIMIT"
+      - CAPTURE=$CAPTURE
     cap_add: 
       - NET_ADMIN
     expose:
@@ -19,24 +22,37 @@ services:
       leftnet:
         ipv4_address: 193.167.0.2
         ipv6_address: fd00:cafe:cafe:0::2
+        interface_name: eth0
       rightnet:
         ipv4_address: 193.167.100.2
         ipv6_address: fd00:cafe:cafe:100::2
+        interface_name: eth1
 
   server:
     build: ./$SERVER
     image: $SERVER
     container_name: server
     hostname: server
+    cpuset: ${SERVER_CPUS}
     stdin_open: true
     tty: true
     volumes:
-      - ./logs/server:/logs
+      - ${RUN_DIR}/server:/usr/local/nginx/logs
+      - ${RUN_DIR}/conf:/usr/local/nginx/conf:ro
+      - ./benchmark/certs:/certs:ro
+      - ./benchmark/www:/www:ro
     environment:
       - ROLE=server
       - SERVER_PARAMS=$SERVER_PARAMS
     depends_on:
       - sim
+    healthcheck:
+      test: ["CMD-SHELL", "ss -H -lun 'sport = :443' | grep -q ."]
+      interval: 10s
+      timeout: 1s
+      retries: 1
+      start_period: 30s
+      start_interval: 250ms
     cap_add: 
       - NET_ADMIN
     networks:
@@ -54,15 +70,19 @@ services:
     image: $CLIENT
     container_name: client
     hostname: client
+    cpuset: ${CLIENT_CPUS}
     stdin_open: true
     tty: true
     volumes:
-      - ./logs/client:/logs
+      - ${RUN_DIR}/client:/logs
     environment:
       - ROLE=client
       - CLIENT_PARAMS=$CLIENT_PARAMS
     depends_on:
-      - sim
+      sim:
+        condition: service_started
+      server:
+        condition: service_healthy
     cap_add: 
       - NET_ADMIN
     networks:
