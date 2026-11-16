@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
   Ptr<Node> source_node = nodes.Get(1);
   Ptr<Node> sink_node = nodes.Get(0);
 
-  QuicPointToPointHelper p2p_source;
+  PointToPointHelper p2p_source;
   p2p_source.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
   p2p_source.SetChannelAttribute("Delay", StringValue("1ms"));
 
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
   ipv4_source.SetBase("193.167.49.0", "255.255.255.0");
   Ipv4InterfaceContainer interfaces_source = ipv4_source.Assign(devices_source);
 
-  QuicPointToPointHelper p2p_sink;
+  PointToPointHelper p2p_sink;
   p2p_sink.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
   p2p_sink.SetChannelAttribute("Delay", StringValue("1ms"));
 
@@ -86,9 +86,6 @@ int main(int argc, char *argv[]) {
   PacketSinkHelper sink("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), port));
   ApplicationContainer apps = sink.Install(sink_node);
   apps.Start(Seconds(0));
-
-  p2p_source.EnablePcapAll("trace-source");
-  p2p_sink.EnablePcapAll("trace-sink");
 
   Simulator::Schedule(print_interval, &printBW, apps.Get(0)->GetObject<PacketSink>());
 

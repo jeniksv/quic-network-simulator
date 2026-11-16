@@ -1,0 +1,30 @@
+[
+  {
+    "name": "single-1k",
+    "client_params": "-n1 -c1 -m1 --alpn-list=h3 https://server4/1k.bin"
+  },
+  {
+    "name": "single-1G",
+    "client_params": "-n1 -c1 -m1 --alpn-list=h3 https://server4/1G.bin"
+  },
+  {
+    "name": "multiplexed-1k",
+    "client_params": "-n256 -c1 -m32 --alpn-list=h3 https://server4/1k.bin"
+  },
+  {
+    "name": "multiplexed-1M",
+    "client_params": "-n256 -c1 -m8 --alpn-list=h3 https://server4/1M.bin"
+  },
+  {
+    "name": "connections-1k",
+    "client_params": "-n256 -c32 -m1 --alpn-list=h3 https://server4/1k.bin"
+  },
+  {
+    "name": "connections-1M",
+    "client_params": "-n256 -c8 -m1 --alpn-list=h3 https://server4/1M.bin"
+  },
+  {
+    "name": "churn",
+    "client_params": "-n1024 -c128 -m4 -r1 --rate-period=2s --alpn-list=h3 https://server4/1k.bin https://server4/10k.bin https://server4/100k.bin https://server4/1M.bin"
+  }
+]

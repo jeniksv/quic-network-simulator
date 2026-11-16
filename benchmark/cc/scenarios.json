@@ -1,0 +1,6 @@
+[
+  {
+    "name": "lossless-wan",
+    "parameters": "simple-p2p --delay=50ms --bandwidth=100Mbps --queue=833"
+  }
+]
