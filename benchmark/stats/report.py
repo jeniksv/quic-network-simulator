@@ -1,44 +1,11 @@
-"""CSV tables and an HTML report of a matrix."""
 import csv
-import html
+from datetime import datetime
+from html import escape
 
-from .matrix import configurations
+from .metrics import METRICS
 
+TITLE = "Benchmark results"
 SUMMARY_COLUMNS = ("n", "median", "ci_low", "ci_high", "p25", "p75", "min", "max", "mean", "sd")
-
-
-def write_runs_csv(path, runs, metrics):
-    """One row per run: identity, whether h2load.json was parsed, and every metric."""
-    with open(path, "w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["scenario", "workload", "config", "repetition", "run", "error",
-                         *[metric.name for metric in metrics]])
-        for run in runs:
-            values = [_csv(run.metrics[m.name]) if run.metrics else "" for m in metrics]
-            writer.writerow([run.scenario, run.workload, run.config, run.repetition, run.name,
-                             run.error or "", *values])
-
-
-def write_cells_csv(path, cells, metrics, confidence):
-    """One row per cell and metric: numbers of runs and the distribution over the runs."""
-    with open(path, "w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["scenario", "workload", "config", "runs", "usable_runs", "metric", *SUMMARY_COLUMNS])
-        for key in sorted(cells):
-            cell = cells[key]
-            usable = len(cell.usable())
-            for metric in metrics:
-                summary = cell.summary(metric, confidence) or {}
-                writer.writerow([*key, len(cell.runs), usable, metric.name,
-                                 *[_csv(summary.get(column)) for column in SUMMARY_COLUMNS]])
-
-
-def _csv(value):
-    if value is None:
-        return ""
-    return f"{value:.10g}" if isinstance(value, float) else value
-
-
 STYLE = """
 :root { --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --head: #f5f5f7; }
 @media (prefers-color-scheme: dark) {
@@ -57,123 +24,134 @@ details { margin: 8px 0; } summary { cursor: pointer; }
 """
 
 
-def write_html(path, title, info, runs, cells, metrics, confidence):
-    sections = {}  # section of the report -> its metrics
-    for metric in metrics:
-        sections.setdefault(_section(metric), []).append(metric)
-    groups = {}  # (scenario, workload) -> configuration -> cell
-    for key in sorted(cells):
-        groups.setdefault(key[:2], {})[key[2]] = cells[key]
-    out = [f"<!doctype html><html lang=en><head><meta charset=utf-8>"
-           f"<meta name=viewport content='width=device-width, initial-scale=1'>"
-           f"<title>{_e(title)}</title><style>{STYLE}</style></head><body><h1>{_e(title)}</h1>",
-           "<p>" + "<br>".join(_e(line) for line in info) + "</p>",
-           "<h2>Runs</h2>", _runs_table(runs), _failed_runs(runs),
-           "<h2>Medians per scenario and workload</h2>",
-           f"<p class=muted>One row per metric and one column per configuration: the median over the "
-           f"usable runs of the cell; the best configuration is bold. Hover for the number of runs, the {confidence:.0%} confidence interval of the median "
-           f"(at least 6 runs) and the extremes.</p>"]
-    for (scenario, workload), group_cells in groups.items():
-        out.append(f"<h3>{_e(scenario)} / {_e(workload)}</h3>")
-        out.append(_median_sections(group_cells, sections, confidence))
-    out.append("<h2>Metrics</h2><ul>")
-    for metric in metrics:
-        notes = [f"{metric.better} is better" if metric.better else "no direction"]
-        if metric.unit:
-            notes.append(metric.unit)
-        out.append(f"<li><b>{_e(metric.name)}</b> ({_e(', '.join(notes))}): {_e(metric.description)}</li>")
-    out.append("</ul></body></html>")
-    path.write_text("\n".join(out))
+class Report:
+    def __init__(self, matrix, percentiles, confidence):
+        self.matrix = matrix
+        self.percentiles = percentiles
+        self.confidence = confidence
+        self.metrics = [metric for definition in METRICS for metric in definition.metrics(percentiles)]
 
+    def write(self, directory):
+        directory.mkdir(parents=True, exist_ok=True)
+        self._write_runs(directory / "runs.csv")
+        self._write_cells(directory / "cells.csv")
+        (directory / "report.html").write_text(self.render())
 
-def _runs_table(runs):
-    parts = ["<table><tr><th class=row>configuration</th><th>runs</th><th>usable</th>"
-             "<th>without h2load.json</th></tr>"]
-    for config, total, usable in configurations(runs):
-        parts.append(f"<tr><td class=row>{_e(config)}</td><td>{total}</td><td>{usable}</td>"
-                     f"<td>{total - usable}</td></tr>")
-    parts.append("</table>")
-    return "".join(parts)
+    def render(self):
+        sections = {}
+        for metric in self.metrics:
+            sections.setdefault(metric.section, []).append(metric)
 
+        parts = [f"<!doctype html><html lang=en><head><meta charset=utf-8>"
+                 f"<meta name=viewport content='width=device-width, initial-scale=1'>"
+                 f"<title>{TITLE}</title><style>{STYLE}</style></head><body><h1>{TITLE}</h1>",
+                 "<p>" + "<br>".join(escape(line) for line in self._info()) + "</p>",
+                 "<h2>Runs</h2>", self._runs_table(), self._failed_runs(),
+                 "<h2>Medians per scenario and workload</h2>",
+                 f"<p class=muted>One row per metric and one column per configuration: the median over the "
+                 f"usable runs of the cell; the best configuration is bold. Hover for the number of runs, the "
+                 f"{self.confidence:.0%} confidence interval of the median (at least 6 runs) and the extremes.</p>"]
+        for (scenario, workload), cells in self.matrix.groups().items():
+            parts.append(f"<h3>{escape(scenario)} / {escape(workload)}</h3>")
+            parts.append(self._median_sections(cells, sections))
 
-def _failed_runs(runs):
-    failed = [run for run in runs if run.metrics is None]
-    if not failed:
-        return "<p class=muted>Every run has a usable h2load.json.</p>"
-    parts = [f"<details><summary>Runs without a usable h2load.json ({len(failed)})</summary>"
-             "<div class=scroll><table><tr><th class=row>run</th><th class=row>reason</th></tr>"]
-    for run in failed:
-        parts.append(f"<tr><td class=row>{_e(run.name)}</td><td class=row>{_e(run.error)}</td></tr>")
-    parts.append("</table></div></details>")
-    return "".join(parts)
+        parts.append("<h2>Metrics</h2><ul>")
+        for metric in self.metrics:
+            notes = [f"{metric.better} is better" if metric.better else "no direction"]
+            if metric.unit.name:
+                notes.append(metric.unit.name)
+            parts.append(f"<li><b>{escape(metric.name)}</b> ({escape(', '.join(notes))}): "
+                         f"{escape(metric.description)}</li>")
+        parts.append("</ul></body></html>")
+        return "\n".join(parts)
 
+    def _write_runs(self, path):
+        with open(path, "w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["scenario", "workload", "config", "repetition", "run", "error",
+                             *[metric.name for metric in self.metrics]])
+            for run in self.matrix.runs:
+                values = [self._csv(metric.value(run.summary)) for metric in self.metrics]
+                writer.writerow([run.scenario, run.workload, run.config, run.repetition, run.name,
+                                 run.error or "", *values])
 
-def _section(metric):
-    """Section of the report: h2load, or the part of the simulator captures (sim.c2s, sim.s2c, sim.conn)."""
-    parts = metric.name.split(".")
-    return ".".join(parts[:2]) if parts[0] == "sim" else "h2load"
+    def _write_cells(self, path):
+        with open(path, "w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["scenario", "workload", "config", "runs", "usable_runs", "metric", *SUMMARY_COLUMNS])
+            for cell in self.matrix.cells:
+                usable = len(cell.usable())
+                for metric in self.metrics:
+                    summary = cell.summary(metric, self.confidence)
+                    writer.writerow([cell.scenario, cell.workload, cell.config, len(cell.runs), usable, metric.name,
+                                     *[self._csv(summary.get(column)) for column in SUMMARY_COLUMNS]])
 
+    def _info(self):
+        distributions = "every statistic" if self.percentiles else "median only (every statistic with --percentiles)"
+        return [f"Runs: {len(self.matrix.runs)} from {self.matrix.root}",
+                f"{len(self.matrix.groups())} scenario/workload groups, {len(self.matrix.configurations())} "
+                f"configurations, {len(self.matrix.cells)} cells",
+                f"Distributions of a run: {distributions}",
+                f"Generated {datetime.now().isoformat(timespec='seconds')}"]
 
-def _median_sections(group_cells, sections, confidence):
-    """One collapsed median table per section; sections without any value are left out."""
-    parts = []
-    for name, metrics in sections.items():
-        if not any(cell.values(metric) for metric in metrics for cell in group_cells.values()):
-            continue
-        parts.append(f"<details><summary>{_e(name)} ({len(metrics)} metrics)"
-                     f"</summary>{_median_table(group_cells, metrics, confidence)}</details>")
-    return "".join(parts)
+    def _runs_table(self):
+        parts = ["<table><tr><th class=row>configuration</th><th>runs</th><th>usable</th>"
+                 "<th>without h2load.json</th></tr>"]
+        for config, total, usable in self.matrix.configurations():
+            parts.append(f"<tr><td class=row>{escape(config)}</td><td>{total}</td><td>{usable}</td>"
+                         f"<td>{total - usable}</td></tr>")
+        parts.append("</table>")
+        return "".join(parts)
 
+    def _failed_runs(self):
+        failed = self.matrix.failed()
+        if not failed:
+            return "<p class=muted>Every run has a usable h2load.json.</p>"
 
-def _median_table(group_cells, metrics, confidence):
-    """Medians of one scenario and workload: one row per metric, one column per configuration."""
-    parts = ["<div class=scroll><table><tr><th class=row>metric</th>"
-             + "".join(f"<th>{_e(config)}</th>" for config in group_cells) + "</tr>",
-             "<tr><td class=row>usable runs</td>"
-             + "".join(f"<td>{len(cell.usable())}/{len(cell.runs)}</td>" for cell in group_cells.values())
-             + "</tr>"]
-    for metric in metrics:
-        summaries = {config: cell.summary(metric, confidence) for config, cell in group_cells.items()}
-        best = _best(metric, summaries)
-        parts.append(f"<tr><td class=row>{_e(metric.name)}</td>")
-        for config, summary in summaries.items():
-            if not summary:
-                parts.append("<td class=na>n/a</td>")
-                continue
-            title = f"n={summary['n']}"
-            if summary["ci_low"] is not None:
-                title += (f", {confidence:.0%} CI {_value(summary['ci_low'], metric)}"
-                          f" – {_value(summary['ci_high'], metric)}")
-            title += f", min {_value(summary['min'], metric)}, max {_value(summary['max'], metric)}"
-            css = " class=best" if config in best else ""
-            parts.append(f"<td{css} title='{_e(title)}'>{_value(summary['median'], metric)}</td>")
-        parts.append("</tr>")
-    parts.append("</table></div>")
-    return "".join(parts)
+        parts = [f"<details><summary>Runs without a usable h2load.json ({len(failed)})</summary>"
+                 "<div class=scroll><table><tr><th class=row>run</th><th class=row>reason</th></tr>"]
+        for run in failed:
+            parts.append(f"<tr><td class=row>{escape(str(run.name))}</td><td class=row>{escape(run.error)}</td></tr>")
+        parts.append("</table></div></details>")
+        return "".join(parts)
 
+    def _median_sections(self, cells, sections):
+        parts = []
+        for name, metrics in sections.items():
+            if any(cell.values(metric) for metric in metrics for cell in cells):
+                parts.append(f"<details><summary>{escape(name)} ({len(metrics)} metrics)"
+                             f"</summary>{self._median_table(cells, metrics)}</details>")
+        return "".join(parts)
 
-def _best(metric, summaries):
-    """Configurations with the best median; none when all of them are equal or the metric has no direction."""
-    medians = {config: summary["median"] for config, summary in summaries.items() if summary}
-    if metric.better is None or len(set(medians.values())) < 2:
-        return set()
-    top = (max if metric.better == "higher" else min)(medians.values())
-    return {config for config, value in medians.items() if value == top}
+    def _median_table(self, cells, metrics):
+        parts = ["<div class=scroll><table><tr><th class=row>metric</th>"
+                 + "".join(f"<th>{escape(cell.config)}</th>" for cell in cells) + "</tr>",
+                 "<tr><td class=row>usable runs</td>"
+                 + "".join(f"<td>{len(cell.usable())}/{len(cell.runs)}</td>" for cell in cells) + "</tr>"]
+        for metric in metrics:
+            summaries = {cell.config: cell.summary(metric, self.confidence) for cell in cells}
+            best = metric.best({config: summary["median"] for config, summary in summaries.items() if summary})
+            parts.append(f"<tr><td class=row>{escape(metric.name)}</td>")
+            for config, summary in summaries.items():
+                parts.append(self._median(metric, summary, config in best))
+            parts.append("</tr>")
+        parts.append("</table></div>")
+        return "".join(parts)
 
+    def _median(self, metric, summary, best):
+        if not summary:
+            return "<td class=na>n/a</td>"
 
-def _value(value, metric):
-    if metric.unit == "bit/s":
-        return f"{value / 1e6:.2f} Mbit/s"
-    if metric.unit == "s":
-        return f"{value * 1e3:.1f} ms" if abs(value) < 10 else f"{value:.2f} s"
-    if metric.unit == "B/s":
-        return f"{value / 1e6:.2f} MB/s"
-    if metric.unit in ("packets", "datagrams", "requests", "responses", "clients", "bytes"):
-        return f"{value:.0f}" if float(value).is_integer() else f"{value:.1f}"
-    if metric.unit == "1/s":
-        return f"{value:.2f}/s"
-    return f"{value:.4g}"
+        title = f"n={summary['n']}"
+        if summary["ci_low"] is not None:
+            title += (f", {self.confidence:.0%} CI {metric.unit.format(summary['ci_low'])}"
+                      f" – {metric.unit.format(summary['ci_high'])}")
+        title += f", min {metric.unit.format(summary['min'])}, max {metric.unit.format(summary['max'])}"
+        css = " class=best" if best else ""
+        return f"<td{css} title='{escape(title)}'>{metric.unit.format(summary['median'])}</td>"
 
-
-def _e(text):
-    return html.escape(str(text), quote=True)
+    @staticmethod
+    def _csv(value):
+        if value is None:
+            return ""
+        return f"{value:.10g}" if isinstance(value, float) else value

@@ -66,10 +66,10 @@ and its server-side interface (`sim/trace_node_right.pcap`), so every QUIC
 datagram appears twice: when it enters the simulator and when it leaves it.
 The UDP payload does not change on the way, so a datagram is matched across
 the captures by its client address and port, its length and a hash of its
-first 64 bytes. Both captures are read at once in time order and only the
-datagrams in the simulator are kept, so even a 1 GB transfer needed about
-130 MiB besides the mapped files, and 41 GB of captures of 52 runs took about
-two minutes.
+first 64 bytes; IPv6 extension headers are not supported. Both captures are
+read at once in time order and only the datagrams in the simulator are kept,
+so even a 1 GB transfer needed about 130 MiB besides the mapped files, and
+41 GB of captures of 52 runs took about two minutes.
 QUIC is encrypted: the captures show datagrams, not requests or
 retransmissions.
 
@@ -82,6 +82,8 @@ drop is known in some scenarios: in `simple-p2p`, `tcp-cross-traffic` and
 `udp-cross-traffic` only the queue of the link drops; `drop-rate` logs its
 decision about every datagram that passed the queue to `sim/console.log`, so
 its `Dropping` lines are the random drops and the rest are queue overflows.
+dumpcap writes its progress into the same lines, so a decision is found
+anywhere in a line.
 
 The queue delay of a datagram is its transit minus the delay of the link and
 the transmission of the datagram with its PPP header at the bandwidth of the

@@ -1,43 +1,66 @@
-"""Runs of a matrix gathered into cells (scenario, workload, configuration) across repetitions."""
-from collections import Counter, defaultdict
+from collections import Counter
+from itertools import groupby
+from operator import attrgetter
+from pathlib import Path
+import re
+import sys
 
-from .distribution import describe, median_ci
+from .cell import Cell
+from .run import Run
 
-
-class Cell:
-    """All runs of one configuration in one scenario and workload."""
-
-    def __init__(self):
-        self.runs = []
-
-    def usable(self):
-        """Runs with a parsed h2load.json."""
-        return [run for run in self.runs if run.metrics is not None]
-
-    def values(self, metric):
-        """Values of the metric, one per usable run that has it."""
-        return [run.metrics[metric.name] for run in self.usable() if run.metrics[metric.name] is not None]
-
-    def summary(self, metric, confidence):
-        """Distribution of the metric over the runs and a confidence interval of its median."""
-        values = self.values(metric)
-        summary = describe(values)
-        if summary is not None:
-            interval = median_ci(sorted(values), confidence)
-            summary["ci_low"], summary["ci_high"] = interval if interval else (None, None)
-        return summary
+REPETITION = re.compile(r"r\d+")
 
 
-def gather(runs):
-    """Group runs into cells keyed by (scenario, workload, config)."""
-    cells = defaultdict(Cell)
-    for run in runs:
-        cells[run.scenario, run.workload, run.config].runs.append(run)
-    return dict(cells)
+class Matrix:
+    def __init__(self, root):
+        self.root = Path(root)
+        self.runs = [Run(directory) for directory in self._directories()]
+        identity = attrgetter("scenario", "workload", "config")
+        self.cells = [Cell(*key, list(runs)) for key, runs in groupby(sorted(self.runs, key=identity), identity)]
 
+    def read(self):
+        for run in self.runs:
+            run.read()
+            for warning in run.warnings:
+                print(f"{run.name}: warning: {warning}", file=sys.stderr)
 
-def configurations(runs):
-    """(configuration, runs, usable runs) of every configuration, in name order."""
-    total = Counter(run.config for run in runs)
-    usable = Counter(run.config for run in runs if run.metrics is not None)
-    return [(config, total[config], usable[config]) for config in sorted(total)]
+    def groups(self):
+        return {key: list(cells) for key, cells in groupby(self.cells, attrgetter("scenario", "workload"))}
+
+    def configurations(self):
+        total = Counter(run.config for run in self.runs)
+        usable = Counter(run.config for run in self.runs if run.usable)
+        return [(config, total[config], usable[config]) for config in sorted(total)]
+
+    def failed(self):
+        return [run for run in self.runs if not run.usable]
+
+    def print_summary(self):
+        configurations = self.configurations()
+        width = max(len("configuration"), *(len(config) for config, _, _ in configurations))
+        print(f"Runs: {len(self.runs)}; {len(self.groups())} scenario/workload groups, "
+              f"{len(configurations)} configurations\n")
+        print("configuration".ljust(width) + "".join(f"{column:>10}" for column in ("runs", "usable", "failed")))
+        for config, total, usable in configurations:
+            print(config.ljust(width) + f"{total:>10}{usable:>10}{total - usable:>10}")
+
+        failed = self.failed()
+        if failed:
+            print("\nRuns without a usable h2load.json:")
+            for run in failed:
+                print(f"  {run.name}: {run.error}")
+
+    def _directories(self):
+        if (self.root / "result.json").is_file():
+            directories = [self.root]
+        elif self.root.is_dir():
+            directories = sorted(result.parent for result in self.root.rglob("result.json"))
+        else:
+            raise ValueError(f"{self.root}: not a directory")
+
+        for directory in directories:
+            parts = directory.parts[-4:] if directory == self.root else directory.relative_to(self.root).parts
+            if len(parts) != 4 or not REPETITION.fullmatch(directory.name):
+                raise ValueError(f"{self.root}: not an output directory of run.py or a run: {directory} is not "
+                                 f"<config>/<scenario>/<workload>/r<N> under it")
+        return directories
