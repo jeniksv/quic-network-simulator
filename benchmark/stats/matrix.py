@@ -1,19 +1,14 @@
 """Runs of a matrix gathered into cells (scenario, workload, configuration) across repetitions."""
+from collections import Counter, defaultdict
+
 from .distribution import describe, median_ci
 
 
 class Cell:
     """All runs of one configuration in one scenario and workload."""
 
-    def __init__(self, scenario, workload, config):
-        self.scenario = scenario
-        self.workload = workload
-        self.config = config
+    def __init__(self):
         self.runs = []
-
-    @property
-    def group(self):
-        return self.scenario, self.workload
 
     def usable(self):
         """Runs with a parsed h2load.json."""
@@ -35,10 +30,14 @@ class Cell:
 
 def gather(runs):
     """Group runs into cells keyed by (scenario, workload, config)."""
-    cells = {}
+    cells = defaultdict(Cell)
     for run in runs:
-        key = (run.scenario, run.workload, run.config)
-        if key not in cells:
-            cells[key] = Cell(*key)
-        cells[key].runs.append(run)
-    return cells
+        cells[run.scenario, run.workload, run.config].runs.append(run)
+    return dict(cells)
+
+
+def configurations(runs):
+    """(configuration, runs, usable runs) of every configuration, in name order."""
+    total = Counter(run.config for run in runs)
+    usable = Counter(run.config for run in runs if run.metrics is not None)
+    return [(config, total[config], usable[config]) for config in sorted(total)]

@@ -2,6 +2,8 @@
 import csv
 import html
 
+from .matrix import configurations
+
 SUMMARY_COLUMNS = ("n", "median", "ci_low", "ci_high", "p25", "p75", "min", "max", "mean", "sd")
 
 
@@ -56,19 +58,24 @@ details { margin: 8px 0; } summary { cursor: pointer; }
 
 
 def write_html(path, title, info, runs, cells, metrics, confidence):
-    configs = sorted({run.config for run in runs})
+    sections = {}  # section of the report -> its metrics
+    for metric in metrics:
+        sections.setdefault(_section(metric), []).append(metric)
+    groups = {}  # (scenario, workload) -> configuration -> cell
+    for key in sorted(cells):
+        groups.setdefault(key[:2], {})[key[2]] = cells[key]
     out = [f"<!doctype html><html lang=en><head><meta charset=utf-8>"
            f"<meta name=viewport content='width=device-width, initial-scale=1'>"
            f"<title>{_e(title)}</title><style>{STYLE}</style></head><body><h1>{_e(title)}</h1>",
            "<p>" + "<br>".join(_e(line) for line in info) + "</p>",
-           "<h2>Runs</h2>", _runs_table(runs, configs), _failed_runs(runs),
+           "<h2>Runs</h2>", _runs_table(runs), _failed_runs(runs),
            "<h2>Medians per scenario and workload</h2>",
            f"<p class=muted>One row per metric and one column per configuration: the median over the "
            f"usable runs of the cell; the best configuration is bold. Hover for the number of runs, the {confidence:.0%} confidence interval of the median "
            f"(at least 6 runs) and the extremes.</p>"]
-    for group in sorted({cell.group for cell in cells.values()}):
-        out.append(f"<h3>{_e(group[0])} / {_e(group[1])}</h3>")
-        out.append(_median_sections(group, configs, metrics, cells, confidence))
+    for (scenario, workload), group_cells in groups.items():
+        out.append(f"<h3>{_e(scenario)} / {_e(workload)}</h3>")
+        out.append(_median_sections(group_cells, sections, confidence))
     out.append("<h2>Metrics</h2><ul>")
     for metric in metrics:
         notes = [f"{metric.better} is better" if metric.better else "no direction"]
@@ -79,14 +86,12 @@ def write_html(path, title, info, runs, cells, metrics, confidence):
     path.write_text("\n".join(out))
 
 
-def _runs_table(runs, configs):
+def _runs_table(runs):
     parts = ["<table><tr><th class=row>configuration</th><th>runs</th><th>usable</th>"
              "<th>without h2load.json</th></tr>"]
-    for config in configs:
-        own = [run for run in runs if run.config == config]
-        usable = sum(run.metrics is not None for run in own)
-        parts.append(f"<tr><td class=row>{_e(config)}</td><td>{len(own)}</td><td>{usable}</td>"
-                     f"<td>{len(own) - usable}</td></tr>")
+    for config, total, usable in configurations(runs):
+        parts.append(f"<tr><td class=row>{_e(config)}</td><td>{total}</td><td>{usable}</td>"
+                     f"<td>{total - usable}</td></tr>")
     parts.append("</table>")
     return "".join(parts)
 
@@ -109,24 +114,19 @@ def _section(metric):
     return ".".join(parts[:2]) if parts[0] == "sim" else "h2load"
 
 
-def _median_sections(group, configs, metrics, cells, confidence):
+def _median_sections(group_cells, sections, confidence):
     """One collapsed median table per section; sections without any value are left out."""
-    sections = {}
-    for metric in metrics:
-        sections.setdefault(_section(metric), []).append(metric)
-    group_cells = [cells[(*group, config)] for config in configs if (*group, config) in cells]
     parts = []
-    for name, own in sections.items():
-        if not any(cell.values(metric) for metric in own for cell in group_cells):
+    for name, metrics in sections.items():
+        if not any(cell.values(metric) for metric in metrics for cell in group_cells.values()):
             continue
-        parts.append(f"<details><summary>{_e(name)} ({len(own)} metrics)"
-                     f"</summary>{_median_table(group, configs, own, cells, confidence)}</details>")
+        parts.append(f"<details><summary>{_e(name)} ({len(metrics)} metrics)"
+                     f"</summary>{_median_table(group_cells, metrics, confidence)}</details>")
     return "".join(parts)
 
 
-def _median_table(group, configs, metrics, cells, confidence):
+def _median_table(group_cells, metrics, confidence):
     """Medians of one scenario and workload: one row per metric, one column per configuration."""
-    group_cells = {config: cells[(*group, config)] for config in configs if (*group, config) in cells}
     parts = ["<div class=scroll><table><tr><th class=row>metric</th>"
              + "".join(f"<th>{_e(config)}</th>" for config in group_cells) + "</tr>",
              "<tr><td class=row>usable runs</td>"

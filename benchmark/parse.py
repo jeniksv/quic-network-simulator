@@ -6,8 +6,9 @@ from pathlib import Path
 import sys
 
 from stats import find_runs
-from stats.matrix import gather
-from stats.metrics import STATISTICS, select
+from stats.distribution import STATISTICS
+from stats.matrix import configurations, gather
+from stats.metrics import select
 from stats.report import write_cells_csv, write_html, write_runs_csv
 
 
@@ -45,8 +46,8 @@ def main():
             print(f"{run.name}: warning: {warning}", file=sys.stderr)
 
     cells = gather(runs)
-    groups = sorted({cell.group for cell in cells.values()})
-    configs = sorted({run.config for run in runs})
+    groups = {key[:2] for key in cells}
+    configs = configurations(runs)  # (configuration, runs, usable runs)
     args.output.mkdir(parents=True, exist_ok=True)
     write_runs_csv(args.output / "runs.csv", runs, metrics)
     write_cells_csv(args.output / "cells.csv", cells, metrics, args.confidence)
@@ -57,13 +58,11 @@ def main():
             f"Generated {datetime.now().isoformat(timespec='seconds')}"]
     write_html(args.output / "report.html", "Benchmark results", info, runs, cells, metrics, args.confidence)
 
-    width = max(len("configuration"), *(len(config) for config in configs))
+    width = max(len("configuration"), *(len(config) for config, _, _ in configs))
     print(f"Runs: {len(runs)}; {len(groups)} scenario/workload groups, {len(configs)} configurations\n")
     print("configuration".ljust(width) + "".join(f"{c:>10}" for c in ("runs", "usable", "failed")))
-    for config in configs:
-        own = [run for run in runs if run.config == config]
-        usable = sum(run.metrics is not None for run in own)
-        print(config.ljust(width) + f"{len(own):>10}{usable:>10}{len(own) - usable:>10}")
+    for config, total, usable in configs:
+        print(config.ljust(width) + f"{total:>10}{usable:>10}{total - usable:>10}")
     failed = [run for run in runs if run.metrics is None]
     if failed:
         print("\nRuns without a usable h2load.json:")

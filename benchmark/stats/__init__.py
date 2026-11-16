@@ -17,8 +17,8 @@ class Run:
     def __init__(self, directory):
         self.directory = directory
         self.name = Path(*directory.parts[-4:])
-        self.config, self.scenario, self.workload, repetition = directory.parts[-4:]
-        self.repetition = int(REPETITION.fullmatch(repetition).group(1))
+        self.config, self.scenario, self.workload, repetition = self.name.parts
+        self.repetition = int(repetition[1:])  # r<N>, checked by find_runs
         self.metrics = None  # metric name -> value; None without a usable h2load.json
         self.warnings = []
         self.error = None

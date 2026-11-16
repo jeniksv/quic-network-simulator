@@ -2,6 +2,8 @@
 import math
 
 QUANTILES = (("p25", 0.25), ("median", None), ("p75", 0.75), ("p90", 0.9), ("p95", 0.95), ("p99", 0.99))
+# Statistics of describe() besides n, in its order.
+STATISTICS = ("min", *(name for name, _ in QUANTILES), "max", "mean", "sd")
 
 
 def nearest_rank(ordered, q):

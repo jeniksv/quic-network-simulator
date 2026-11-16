@@ -20,8 +20,12 @@ SAMPLES = {
 }
 # One sample per received datagram, so the largest part of the file.
 IGNORED = {"gro_packets"}
-# Values h2load stores for a client that never connected; min_rtt is then -1 ns.
-UNCONNECTED = {"request_per_second": 0.0, "smoothed_rtt": 0.333}
+# Removal of the values h2load stores for the clients that never connected, given their number.
+UNCONNECTED = {
+    "min_rtt": lambda values, count: [value for value in values if value >= 0],  # -1 ns
+    "request_per_second": lambda values, count: _without(values, 0.0, count),
+    "smoothed_rtt": lambda values, count: _without(values, 0.333, count),  # the initial RTT
+}
 
 
 def summarize(path):
@@ -38,14 +42,10 @@ def summarize(path):
     unconnected = clients - connected
     samples = {}
     for key, name in SAMPLES.items():
-        values = list(performance[key]["samples"])
-        if key == "min_rtt":
-            kept = [value for value in values if value >= 0]
-        elif key in UNCONNECTED:
-            kept = _without(values, UNCONNECTED[key], unconnected)
-        else:
-            kept = values
-        if (key == "min_rtt" or key in UNCONNECTED) and len(values) - len(kept) != unconnected:
+        values = performance[key]["samples"]
+        remove = UNCONNECTED.get(key)
+        kept = remove(values, unconnected) if remove else values
+        if remove and len(values) - len(kept) != unconnected:
             warnings.append(f"{key} has {len(values) - len(kept)} values of unconnected clients, "
                             f"expected {unconnected}")
         samples[name] = kept
@@ -55,10 +55,10 @@ def summarize(path):
     duration = measurements["duration"]
     return {
         "duration_s": duration,
-        "requests": dict(requests),
-        "status_codes": dict(measurements["status_codes"]),
-        "traffic": dict(traffic),
-        "udp_datagram": dict(measurements["udp_datagram"]),
+        "requests": requests,
+        "status_codes": measurements["status_codes"],
+        "traffic": traffic,
+        "udp_datagram": measurements["udp_datagram"],
         "bytes_per_second": measurements["bytes_per_second"],
         "success_rate": requests["succeeded"] / requests["total"] if requests["total"] else None,
         "goodput_bps": traffic["data"] * 8 / duration if duration else None,
@@ -69,7 +69,7 @@ def summarize(path):
         "client_packets_sent_total": sum(samples["client_packets_sent"]),
         "client_packets_received_total": sum(samples["client_packets_received"]),
         "client_packets_lost_total": sum(samples["client_packets_lost"]),
-        "distributions": {name: describe(values) for name, values in samples.items()},
+        **{name: describe(values) for name, values in samples.items()},  # distributions of the sample arrays
     }, warnings
 
 
