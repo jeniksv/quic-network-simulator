@@ -5,12 +5,13 @@ STATISTICS = ("min", "p25", "median", "p75", "p90", "p95", "p99", "max", "mean",
 
 
 class Metric:
-    def __init__(self, name, unit, better, description, extract):
+    def __init__(self, name, unit, better, description, extract, statistic=None):
         self.name = name
         self.unit = unit
         self.better = better  # "higher", "lower", or None without a direction
         self.description = description
         self.extract = extract
+        self.statistic = statistic  # statistic of a distribution, None for a single value
 
 
 def _value(key):
@@ -21,13 +22,60 @@ def _nested(group, key):
     return lambda summary: summary[group].get(key)
 
 
-def _distribution(array, unit, better, what):
-    """One metric per statistic of a sample array; a lower spread (sd) is better when the array has a direction."""
+def _sim(*keys):
+    """Value of the summary of the simulator captures; None without them."""
+    def extract(summary):
+        value = summary.get("sim")
+        for key in keys:
+            if value is None:
+                return None
+            value = value.get(key)
+        return value
+    return extract
+
+
+def _overhead(summary):
+    sent, data = _sim("s2c", "bytes")(summary), summary["traffic"].get("data")
+    return sent / data - 1 if sent is not None and data else None
+
+
+def _distribution(name, unit, better, what, distribution=None):
+    """One metric per statistic of a distribution, by default of the h2load sample array of that name.
+
+    A lower spread (sd) is better when the distribution has a direction.
+    """
+    if distribution is None:
+        def distribution(summary):
+            return summary["distributions"].get(name)
+
     def extract(statistic):
-        return lambda summary: (summary["distributions"].get(array) or {}).get(statistic)
-    return tuple(Metric(f"{array}.{statistic}", unit, "lower" if statistic == "sd" and better else better,
-                        f"{statistic} of {what}", extract(statistic))
+        return lambda summary: (distribution(summary) or {}).get(statistic)
+    return tuple(Metric(f"{name}.{statistic}", unit, "lower" if statistic == "sd" and better else better,
+                        f"{statistic} of {what}", extract(statistic), statistic)
                  for statistic in STATISTICS)
+
+
+def _direction(direction, what):
+    """Metrics of the datagrams of one direction through the simulator."""
+    def metric(key, unit, better, description):
+        return Metric(f"sim.{direction}.{key}", unit, better, description, _sim(direction, key))
+    return (
+        metric("datagrams", "datagrams", None, f"Datagrams {what} that entered the simulator"),
+        metric("bytes", "bytes", None, f"UDP payload bytes {what} that entered the simulator"),
+        metric("long_header_datagrams", "datagrams", None, f"Datagrams {what} with a long header (handshake)"),
+        metric("dropped", "datagrams", "lower", f"Datagrams {what} dropped in the simulator"),
+        metric("drop_rate", "", "lower", f"Datagrams {what} dropped in the simulator divided by those that "
+                                         f"entered it, without those in flight at the end"),
+        metric("dropped_random", "datagrams", "lower", f"Datagrams {what} dropped by the loss model of the scenario"),
+        metric("dropped_queue", "datagrams", "lower", f"Datagrams {what} dropped by the full queue of the link"),
+        metric("in_flight_at_end", "datagrams", None, f"Datagrams {what} still in the simulator when it stopped"),
+        *_distribution(f"sim.{direction}.transit_s", "s", "lower", f"the times of the datagrams {what} "
+                       f"through the simulator", _sim(direction, "transit_s")),
+        *_distribution(f"sim.{direction}.queue_delay_s", "s", "lower", f"the times of the datagrams {what} "
+                       f"in the queue of the link", _sim(direction, "queue_delay_s")),
+        *_distribution(f"sim.{direction}.datagram_bytes", "bytes", None, f"the UDP payload lengths of the "
+                       f"datagrams {what}", _sim(direction, "datagram_bytes")),
+    )
 
 
 METRICS = (
@@ -83,4 +131,29 @@ METRICS = (
            "Packets the clients sent and declared lost, mostly acknowledgments", _value("client_packets_lost_total")),
     *_distribution("client_packets_lost", "packets", "lower",
                    "the packets the clients sent and declared lost, mostly acknowledgments"),
+    *_direction("c2s", "from the client to the server"),
+    *_direction("s2c", "from the server to the client"),
+    Metric("sim.s2c.egress_bps", "bit/s", "higher", "UDP payload bits per second leaving the simulator toward "
+           "the client, from its first to its last datagram", _sim("s2c", "egress_bps")),
+    Metric("sim.s2c.utilization", "", "higher", "Bits on the link toward the client divided by its bandwidth and "
+           "the time from the first to the last datagram", _sim("s2c", "utilization")),
+    Metric("sim.s2c.overhead", "", "lower", "UDP payload bytes the server sent divided by traffic.data, minus 1: "
+           "QUIC and HTTP/3 overhead and retransmissions", _overhead),
+    *_distribution("sim.s2c.burst_datagrams", "datagrams", "lower", "the bursts of the server: datagrams that "
+                   "entered the simulator faster than the link transmits them", _sim("s2c", "burst_datagrams")),
+    Metric("sim.s2c.burst_share_10", "", "lower", "Share of the datagrams of the server in bursts of at least 10",
+           _sim("s2c", "burst_share_10")),
+    *_distribution("sim.conn.drop_rate", "", "lower", "the drop rates of the connections in the simulator, "
+                   "both directions", _sim("conn", "drop_rate")),
+    *_distribution("sim.conn.queue_delay_s", "s", "lower", "the median queue delays of the connections toward "
+                   "the client", _sim("conn", "queue_delay_s")),
+    *_distribution("sim.conn.duration_s", "s", "lower", "the durations of the connections on the client side "
+                   "of the simulator", _sim("conn", "duration_s")),
 )
+
+
+def select(percentiles):
+    """Metrics to report: every statistic of a distribution with percentiles, otherwise only its median."""
+    if percentiles:
+        return METRICS
+    return tuple(metric for metric in METRICS if metric.statistic in (None, "median"))

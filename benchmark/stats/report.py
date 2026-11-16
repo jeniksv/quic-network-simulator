@@ -68,7 +68,7 @@ def write_html(path, title, info, runs, cells, metrics, confidence):
            f"(at least 6 runs) and the extremes.</p>"]
     for group in sorted({cell.group for cell in cells.values()}):
         out.append(f"<h3>{_e(group[0])} / {_e(group[1])}</h3>")
-        out.append(_median_table(group, configs, metrics, cells, confidence))
+        out.append(_median_sections(group, configs, metrics, cells, confidence))
     out.append("<h2>Metrics</h2><ul>")
     for metric in metrics:
         notes = [f"{metric.better} is better" if metric.better else "no direction"]
@@ -100,6 +100,27 @@ def _failed_runs(runs):
     for run in failed:
         parts.append(f"<tr><td class=row>{_e(run.name)}</td><td class=row>{_e(run.error)}</td></tr>")
     parts.append("</table></div></details>")
+    return "".join(parts)
+
+
+def _section(metric):
+    """Section of the report: h2load, or the part of the simulator captures (sim.c2s, sim.s2c, sim.conn)."""
+    parts = metric.name.split(".")
+    return ".".join(parts[:2]) if parts[0] == "sim" else "h2load"
+
+
+def _median_sections(group, configs, metrics, cells, confidence):
+    """One collapsed median table per section; sections without any value are left out."""
+    sections = {}
+    for metric in metrics:
+        sections.setdefault(_section(metric), []).append(metric)
+    group_cells = [cells[(*group, config)] for config in configs if (*group, config) in cells]
+    parts = []
+    for name, own in sections.items():
+        if not any(cell.values(metric) for metric in own for cell in group_cells):
+            continue
+        parts.append(f"<details><summary>{_e(name)} ({len(own)} metrics)"
+                     f"</summary>{_median_table(group, configs, own, cells, confidence)}</details>")
     return "".join(parts)
 
 
@@ -151,7 +172,7 @@ def _value(value, metric):
         return f"{value:.0f}" if float(value).is_integer() else f"{value:.1f}"
     if metric.unit == "1/s":
         return f"{value:.2f}/s"
-    return f"{value:.3f}"
+    return f"{value:.4g}"
 
 
 def _e(text):
