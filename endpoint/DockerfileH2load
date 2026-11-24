@@ -1,0 +1,50 @@
+FROM debian:trixie-slim AS build
+
+ARG OPENSSL_VERSION=3.5.0
+ARG NGHTTP3_VERSION=v1.12.0
+ARG NGTCP2_VERSION=v1.16.0
+ARG NGHTTP2_VERSION=v1.69.0
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        g++ \
+        make \
+        binutils \
+        autoconf \
+        automake \
+        autotools-dev \
+        libtool \
+        pkg-config \
+        cmake \
+        zlib1g-dev \
+        libev-dev \
+        libc-ares-dev \
+        ca-certificates \
+        curl
+
+WORKDIR /src
+
+RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" | tar xz \
+ && cd "openssl-${OPENSSL_VERSION}" \
+ && ./Configure --prefix=/usr/local --libdir=lib enable-tls1_3 no-shared \
+ && make -j"$(nproc)" && make install_sw
+
+RUN git clone --depth 1 -b "${NGHTTP3_VERSION}" https://github.com/ngtcp2/nghttp3 \
+ && cd nghttp3 && git submodule update --init --depth 1 \
+ && autoreconf -i && ./configure --prefix=/usr/local --enable-lib-only --disable-shared \
+ && make -j"$(nproc)" && make install
+
+RUN git clone --depth 1 -b "${NGTCP2_VERSION}" https://github.com/ngtcp2/ngtcp2 \
+ && cd ngtcp2 && git submodule update --init --depth 1 \
+ && autoreconf -i && ./configure --prefix=/usr/local --enable-lib-only --with-openssl --disable-shared \
+ && make -j"$(nproc)" && make install
+
+RUN git clone --depth 1 -b "${NGHTTP2_VERSION}" https://github.com/nghttp2/nghttp2 \
+ && cd nghttp2 && git submodule update --init --depth 1 \
+ && autoreconf -i \
+ && ./configure --prefix=/usr/local --enable-app --enable-http3 --without-jemalloc --with-libnghttp3 --with-libngtcp2 --with-openssl --disable-shared LIBEV_LIBS="-l:libev.a" LIBCARES_LIBS="-l:libcares.a" \
+ && make -j"$(nproc)" && make install
+
+
+FROM debian:trixie-slim
+COPY --from=build /usr/local/bin/h2load /usr/local/bin/h2load
