@@ -4,8 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from stats import Matrix, Report
-from stats.sample import STATISTICS
+from stats import Matrix, Report, Sample
 
 
 def main():
@@ -19,27 +18,24 @@ def main():
     parser.add_argument("--confidence", type=float, default=0.95,
                         help="Confidence of the interval of a median (default: 0.95)")
     parser.add_argument("--percentiles", action="store_true",
-                        help=f"Report every statistic of the distributions of a run ({', '.join(STATISTICS)}); "
-                             f"by default only the median")
+                        help=f"Report every statistic of the distributions of a run "
+                             f"({', '.join(Sample.statistics)}); by default only the median")
     args = parser.parse_args()
-
-    if args.output is None:
-        args.output = args.path / "summary"
+    output = args.output or args.path / "summary"
 
     try:
         matrix = Matrix(args.path)
-    except ValueError as error:
+        matrix.read()
+        Report(matrix, args.percentiles, args.confidence).write(output)
+        matrix.print_summary()
+        print(f"\nWritten to {output}: report.html, runs.csv, cells.csv")
+        return 0
+    except KeyboardInterrupt:
+        print("Interrupted.", file=sys.stderr)
+        return 130
+    except (OSError, ValueError) as error:
         print(error, file=sys.stderr)
         return 1
-    if not matrix.runs:
-        print(f"No finished runs: no result.json under {args.path}.", file=sys.stderr)
-        return 1
-
-    matrix.read()
-    Report(matrix, args.percentiles, args.confidence).write(args.output)
-    matrix.print_summary()
-    print(f"\nWritten to {args.output}: report.html, runs.csv, cells.csv")
-    return 0
 
 
 if __name__ == "__main__":
