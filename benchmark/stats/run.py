@@ -23,7 +23,7 @@ class Run:
         return self.summary is not None
 
     def read(self):
-        h2load = H2load(self.directory / H2LOAD)
+        h2load = H2load(self.directory / H2LOAD, self.warnings)
         if not h2load.exists():
             self.error = f"no {H2LOAD}"
             return
@@ -34,12 +34,11 @@ class Run:
             self.error = f"{H2LOAD}: {error!r}"
             return
 
-        self.warnings += h2load.warnings
         summary["sim"] = self._read_captures(summary)
         self.summary = summary
 
     def _read_captures(self, summary):
-        captures = Captures(self.directory / "sim")
+        captures = Captures(self.directory / "sim", self.warnings)
         if not captures.exists():
             return None
 
@@ -50,8 +49,7 @@ class Run:
             self.warnings.append(f"sim captures: {error!r}")
             return None
 
-        self.warnings += captures.warnings
-        sent = summary["udp_datagram"].get("sent")
+        sent =summary["udp_datagram"].get("sent")
         if measured["c2s"]["datagrams"] != sent:
             self.warnings.append(f"the client sent {sent} datagrams, {measured['c2s']['datagrams']} entered "
                                  f"the simulator")

@@ -9,24 +9,48 @@ INITIAL_RTT = 0.333
 
 
 class SampleArray:
-    def __init__(self, key, name, sentinel=None, total=False):
+    def __init__(self, key, name):
         self.key = key
         self.name = name
-        self.sentinel = sentinel
-        self.total = total
 
-    def connected(self, values, unconnected):
+    def connected(self, values, unconnected, warnings):
+        return values
+
+    def describe(self, values):
+        return Sample(values).describe()
+
+
+class TotalArray(SampleArray):
+    def describe(self, values):
+        summary = super().describe(values)
+        summary["total"] = sum(values)
+        return summary
+
+
+class PlaceholderArray(SampleArray):
+    def __init__(self, key, name, placeholder):
+        super().__init__(key, name)
+        self.placeholder = placeholder
+
+    def connected(self, values, unconnected, warnings):
+        kept = self.kept(values, unconnected)
+        if len(values) - len(kept) != unconnected:
+            warnings.append(f"{self.key} has {len(values) - len(kept)} values of unconnected clients, "
+                            f"expected {unconnected}")
+        return kept
+
+    def kept(self, values, unconnected):
         kept = []
         for value in values:
-            if unconnected and abs(value - self.sentinel) < 1e-9:
+            if unconnected and abs(value - self.placeholder) < 1e-9:
                 unconnected -= 1
             else:
                 kept.append(value)
         return kept
 
 
-class MinRttArray(SampleArray):
-    def connected(self, values, unconnected):
+class MinRttArray(PlaceholderArray):
+    def kept(self, values, unconnected):
         return [value for value in values if value >= 0]
 
 
@@ -34,19 +58,19 @@ SAMPLE_ARRAYS = (
     SampleArray("request", "request_s"),
     SampleArray("connect", "connect_s"),
     SampleArray("ttfb", "ttfb_s"),
-    SampleArray("request_per_second", "client_requests_per_second", sentinel=0.0),
-    MinRttArray("min_rtt", "client_min_rtt_s", sentinel=-1e-9),
-    SampleArray("smoothed_rtt", "client_smoothed_rtt_s", sentinel=INITIAL_RTT),
-    SampleArray("packets_sent", "client_packets_sent", total=True),
-    SampleArray("packets_recv", "client_packets_received", total=True),
-    SampleArray("packets_lost", "client_packets_lost", total=True),
+    PlaceholderArray("request_per_second", "client_requests_per_second", 0.0),
+    MinRttArray("min_rtt", "client_min_rtt_s", -1e-9),
+    PlaceholderArray("smoothed_rtt", "client_smoothed_rtt_s", INITIAL_RTT),
+    TotalArray("packets_sent", "client_packets_sent"),
+    TotalArray("packets_recv", "client_packets_received"),
+    TotalArray("packets_lost", "client_packets_lost"),
 )
 
 
 class H2load:
-    def __init__(self, path):
+    def __init__(self, path, warnings):
         self.path = path
-        self.warnings = []
+        self.warnings = warnings
 
     def exists(self):
         return self.path.exists()
@@ -56,11 +80,11 @@ class H2load:
         performance = measurements["performance"]
         known = {array.key for array in SAMPLE_ARRAYS} | IGNORED
         unknown = sorted(set(measurements) - MEASUREMENTS) + sorted(set(performance) - known)
-        self.warnings = [f"unknown measurement {name!r}" for name in unknown]
+        self.warnings += [f"unknown measurement {name!r}" for name in unknown]
 
         clients = len(performance["request_per_second"]["samples"])
         connected = len(performance["connect"]["samples"])
-        samples = {array.name: self._connected(array, performance[array.key]["samples"], clients - connected)
+        samples = {array.name: array.connected(performance[array.key]["samples"], clients - connected, self.warnings)
                    for array in SAMPLE_ARRAYS}
 
         requests = measurements["requests"]
@@ -81,17 +105,5 @@ class H2load:
             "client_fairness_jain": Sample(samples["client_requests_per_second"]).jain(),
         }
         for array in SAMPLE_ARRAYS:
-            summary[array.name] = Sample(samples[array.name]).describe()
-            if array.total:
-                summary[array.name]["total"] = sum(samples[array.name])
+            summary[array.name] = array.describe(samples[array.name])
         return summary
-
-    def _connected(self, array, values, unconnected):
-        if array.sentinel is None:
-            return values
-
-        kept = array.connected(values, unconnected)
-        if len(values) - len(kept) != unconnected:
-            self.warnings.append(f"{array.key} has {len(values) - len(kept)} values of unconnected clients, "
-                                 f"expected {unconnected}")
-        return kept

@@ -1,4 +1,4 @@
-from .sample import STATISTICS
+from .sample import Sample
 from .units import (BIT_RATE, BYTE_RATE, BYTES, CLIENTS, DATAGRAMS, PACKETS, RATE, RATIO, REQUESTS, RESPONSES,
                     SECONDS)
 
@@ -34,7 +34,7 @@ class Metric:
 
 class Distribution(Metric):
     def metrics(self, percentiles):
-        for statistic in STATISTICS if percentiles else ("median",):
+        for statistic in Sample.statistics if percentiles else ("median",):
             better = "lower" if statistic == "sd" and self.better else self.better
             yield Metric(f"{self.name}.{statistic}", self.unit, better, f"{statistic} of {self.description}")
 

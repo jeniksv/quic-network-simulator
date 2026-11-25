@@ -8,8 +8,9 @@ class Cell:
         self.config = config
         self.runs = runs
 
+    @property
     def usable(self):
-        return [run for run in self.runs if run.usable]
+        return sum(run.usable for run in self.runs)
 
     def values(self, metric):
         values = [metric.value(run.summary) for run in self.runs]

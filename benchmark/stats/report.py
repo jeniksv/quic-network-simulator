@@ -51,7 +51,7 @@ class Report:
                  f"<p class=muted>One row per metric and one column per configuration: the median over the "
                  f"usable runs of the cell; the best configuration is bold. Hover for the number of runs, the "
                  f"{self.confidence:.0%} confidence interval of the median (at least 6 runs) and the extremes.</p>"]
-        for (scenario, workload), cells in self.matrix.groups().items():
+        for (scenario, workload), cells in self.matrix.groups.items():
             parts.append(f"<h3>{escape(scenario)} / {escape(workload)}</h3>")
             parts.append(self._median_sections(cells, sections))
 
@@ -80,16 +80,16 @@ class Report:
             writer = csv.writer(file)
             writer.writerow(["scenario", "workload", "config", "runs", "usable_runs", "metric", *SUMMARY_COLUMNS])
             for cell in self.matrix.cells:
-                usable = len(cell.usable())
                 for metric in self.metrics:
                     summary = cell.summary(metric, self.confidence)
-                    writer.writerow([cell.scenario, cell.workload, cell.config, len(cell.runs), usable, metric.name,
+                    writer.writerow([cell.scenario, cell.workload, cell.config, len(cell.runs), cell.usable,
+                                     metric.name,
                                      *[self._csv(summary.get(column)) for column in SUMMARY_COLUMNS]])
 
     def _info(self):
         distributions = "every statistic" if self.percentiles else "median only (every statistic with --percentiles)"
-        return [f"Runs: {len(self.matrix.runs)} from {self.matrix.root}",
-                f"{len(self.matrix.groups())} scenario/workload groups, {len(self.matrix.configurations())} "
+        return [f"Runs: {len(self.matrix.runs)} from {self.matrix.directory}",
+                f"{len(self.matrix.groups)} scenario/workload groups, {len(self.matrix.configurations())} "
                 f"configurations, {len(self.matrix.cells)} cells",
                 f"Distributions of a run: {distributions}",
                 f"Generated {datetime.now().isoformat(timespec='seconds')}"]
@@ -127,7 +127,7 @@ class Report:
         parts = ["<div class=scroll><table><tr><th class=row>metric</th>"
                  + "".join(f"<th>{escape(cell.config)}</th>" for cell in cells) + "</tr>",
                  "<tr><td class=row>usable runs</td>"
-                 + "".join(f"<td>{len(cell.usable())}/{len(cell.runs)}</td>" for cell in cells) + "</tr>"]
+                 + "".join(f"<td>{cell.usable}/{len(cell.runs)}</td>" for cell in cells) + "</tr>"]
         for metric in metrics:
             summaries = {cell.config: cell.summary(metric, self.confidence) for cell in cells}
             best = metric.best({config: summary["median"] for config, summary in summaries.items() if summary})

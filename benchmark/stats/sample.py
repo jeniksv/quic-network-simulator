@@ -1,11 +1,12 @@
 import math
-import statistics
+from statistics import fmean
 
 QUANTILES = (("p25", 0.25), ("median", None), ("p75", 0.75), ("p90", 0.9), ("p95", 0.95), ("p99", 0.99))
-STATISTICS = ("min", *(name for name, _ in QUANTILES), "max", "mean", "sd")
 
 
 class Sample:
+    statistics = ("min", *(name for name, _ in QUANTILES), "max", "mean", "sd")
+
     def __init__(self, values):
         self.values = sorted(values)
 
@@ -23,7 +24,7 @@ class Sample:
             return {}
 
         count = len(self.values)
-        mean = statistics.fmean(self.values)
+        mean = fmean(self.values)
         summary = {"n": count, "min": self.values[0]}
         for name, q in QUANTILES:
             summary[name] = self.median() if q is None else self.quantile(q)

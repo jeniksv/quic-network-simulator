@@ -12,20 +12,21 @@ REPETITION = re.compile(r"r\d+")
 
 
 class Matrix:
-    def __init__(self, root):
-        self.root = Path(root)
+    def __init__(self, directory):
+        self.directory = Path(directory).resolve()
         self.runs = [Run(directory) for directory in self._directories()]
+        if not self.runs:
+            raise ValueError(f"No finished runs: no result.json under {self.directory}.")
+
         identity = attrgetter("scenario", "workload", "config")
         self.cells = [Cell(*key, list(runs)) for key, runs in groupby(sorted(self.runs, key=identity), identity)]
+        self.groups = {key: list(cells) for key, cells in groupby(self.cells, attrgetter("scenario", "workload"))}
 
     def read(self):
         for run in self.runs:
             run.read()
             for warning in run.warnings:
                 print(f"{run.name}: warning: {warning}", file=sys.stderr)
-
-    def groups(self):
-        return {key: list(cells) for key, cells in groupby(self.cells, attrgetter("scenario", "workload"))}
 
     def configurations(self):
         total = Counter(run.config for run in self.runs)
@@ -38,7 +39,7 @@ class Matrix:
     def print_summary(self):
         configurations = self.configurations()
         width = max(len("configuration"), *(len(config) for config, _, _ in configurations))
-        print(f"Runs: {len(self.runs)}; {len(self.groups())} scenario/workload groups, "
+        print(f"Runs: {len(self.runs)}; {len(self.groups)} scenario/workload groups, "
               f"{len(configurations)} configurations\n")
         print("configuration".ljust(width) + "".join(f"{column:>10}" for column in ("runs", "usable", "failed")))
         for config, total, usable in configurations:
@@ -51,16 +52,17 @@ class Matrix:
                 print(f"  {run.name}: {run.error}")
 
     def _directories(self):
-        if (self.root / "result.json").is_file():
-            directories = [self.root]
-        elif self.root.is_dir():
-            directories = sorted(result.parent for result in self.root.rglob("result.json"))
+        if (self.directory / "result.json").is_file():
+            directories = [self.directory]
+        elif self.directory.is_dir():
+            directories = sorted(result.parent for result in self.directory.rglob("result.json"))
         else:
-            raise ValueError(f"{self.root}: not a directory")
+            raise ValueError(f"{self.directory}: not a directory")
 
         for directory in directories:
-            parts = directory.parts[-4:] if directory == self.root else directory.relative_to(self.root).parts
+            parts = (directory.parts[-4:] if directory == self.directory
+                     else directory.relative_to(self.directory).parts)
             if len(parts) != 4 or not REPETITION.fullmatch(directory.name):
-                raise ValueError(f"{self.root}: not an output directory of run.py or a run: {directory} is not "
-                                 f"<config>/<scenario>/<workload>/r<N> under it")
+                raise ValueError(f"{self.directory}: not an output directory of run.py or a run: {directory} is "
+                                 f"not <config>/<scenario>/<workload>/r<N> under it")
         return directories

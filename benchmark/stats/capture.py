@@ -44,10 +44,10 @@ PORTS = struct.Struct("!HHH")
 
 
 class Captures:
-    def __init__(self, directory):
+    def __init__(self, directory, warnings):
         self.directory = directory
         self.captures = [Capture(directory / name, side) for side, name in CAPTURES.items()]
-        self.warnings = []
+        self.warnings = warnings
 
     def exists(self):
         return all(capture.path.is_file() for capture in self.captures)
@@ -98,7 +98,7 @@ class Captures:
 
     @staticmethod
     def _connections(flows):
-        values = {"drop_rate": [], "queue_delay_s": [], "duration_s": []}
+        values = defaultdict(list)
         for flow in flows.values():
             for key, value in flow.summary().items():
                 if value is not None:
@@ -173,7 +173,7 @@ class DropRate(LossModel):
         if not path.is_file():
             return None
 
-        counts = {"c2s": Counter(), "s2c": Counter()}
+        counts = {name: Counter() for name in INGRESS}
         with open(path, errors="replace") as file:
             for line in file:
                 for decision, source_port, destination_port in DECISION.findall(line):
