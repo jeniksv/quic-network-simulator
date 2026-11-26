@@ -19,6 +19,12 @@
     "quic_congestion_control": "bbr2"
   },
   {
+    "name": "quiche_bbr_pacing",
+    "backend": "quiche",
+    "quic_congestion_control": "bbr2",
+    "quic_congestion_control_pacing": "on"
+  },
+  {
     "name": "quiche_bbr_pmtud",
     "backend": "quiche",
     "quic_congestion_control": "bbr2",

@@ -28,7 +28,7 @@ class BackendDirective(NginxDirective):
         return f"__LISTEN__"
 
     def render(self):
-        return f"listen 443 quic={self.value} reuseport;"
+        return f"listen 443 quic={self.value} reuseport sndbuf=4m;"
 
 
 class CongestionControlDirective(NginxDirective):
@@ -42,13 +42,13 @@ class StreamBufferSizeDirective(NginxDirective):
     optional = True
 
 
-class QuicPktsBetweenProbesDirective(NginxDirective):
-    name = "quic_pkts_between_probes"
+class PmtudPktsBetweenProbesDirective(NginxDirective):
+    name = "quic_pmtud_pkts_between_probes"
     optional = True
 
 
-class DiscoverPmtuDirective(NginxDirective):
-    name = "quic_discover_pmtu"
+class PmtudDirective(NginxDirective):
+    name = "quic_pmtud"
     optional = True
 
 
@@ -68,8 +68,8 @@ DIRECTIVE_TYPES = (
     WorkerProcessesDirective,
     CongestionControlDirective,
     StreamBufferSizeDirective,
-    QuicPktsBetweenProbesDirective,
-    DiscoverPmtuDirective,
+    PmtudPktsBetweenProbesDirective,
+    PmtudDirective,
     MaxSendUdpPayloadSizeDirective,
     ActiveConnectionIdLimitDirective,
 )

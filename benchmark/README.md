@@ -61,10 +61,22 @@ created, and `run.py` does not accept directives or scenarios as CLI arguments.
 
 NGINX directive names are JSON keys. Missing values use the defaults in
 `runner/directives.py`: one worker, the `quiche` backend and a 4 MiB stream
-buffer. `quic_congestion_control` and `quic_pkts_between_probes` are omitted by
-default, and `null` omits `http3_stream_buffer_size`. `backend` selects the QUIC
-implementation in the template's `listen 443 quic=<backend> reuseport;` directive.
-Unknown directive names are errors. NGINX validates the generated configuration.
+buffer. `quic_congestion_control` and `quic_pmtud_pkts_between_probes` are
+omitted by default, and `null` omits `http3_stream_buffer_size`. `backend`
+selects the QUIC implementation in the template's
+`listen 443 quic=<backend> reuseport sndbuf=4m;` directive. Unknown directive
+names are errors. NGINX validates the generated configuration.
+
+The server replaces the queueing discipline of its interface with
+`fq flow_limit 1000` before NGINX starts. Otherwise the veth interface of the
+container keeps `noqueue`, which sends every datagram at once. Only `fq` holds
+a datagram until its release time (`SO_TXTIME`), which the quiche backend sets
+when it paces; in the quiche version used, only bbr2 paces, and the datagrams
+of the other configurations leave at once. NGINX hands over the datagrams due
+within 1/8 of the smoothed RTT (1–5 ms) and delays the rest with a timer, so
+without `fq` bbr2 would send bursts of up to that much data. `fq` limits the
+datagrams of one UDP socket to `flow_limit` (default 100) and charges them to
+its send buffer, hence the 4 MiB `sndbuf` of the `listen` directive.
 
 `scenarios.json` only describes the simulated network. `parameters` is passed
 to the simulator as `SCENARIO`; `--delay` is one-way and `--queue` is measured

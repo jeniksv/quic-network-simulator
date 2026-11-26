@@ -3,14 +3,14 @@
     "name": "quiche_pmtud_on",
     "backend": "quiche",
     "quic_congestion_control": "bbr2",
-    "quic_discover_pmtu": "on",
+    "quic_pmtud": "on",
     "quic_max_send_udp_payload_size": 1600
   },
   {
     "name": "quiche_pmtud_off",
     "backend": "quiche",
     "quic_congestion_control": "bbr2",
-    "quic_discover_pmtu": "off",
+    "quic_pmtud": "off",
     "quic_max_send_udp_payload_size": 1200
   }
 ]
