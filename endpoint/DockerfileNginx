@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 
 ARG BORINGSSL_COMMIT=427ec40cc8edc545253289232e885708c409e5ea
-ARG NGINX_COMMIT=541a2e7ca91ca4514d4d594ca90fa3c127f6ad2c
+ARG NGINX_COMMIT=25672181f91376190a7736f7720d543d40a7e5a9
 ARG QUICHE_COMMIT=abd8ce1139d8892b4a896be4a8933a3c9baafccc
 
 RUN git init boringssl && cd boringssl \

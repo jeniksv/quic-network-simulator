@@ -10,7 +10,7 @@ if [ "$ROLE" == "client" ]; then
     h2load --output-file=/logs/h2load.json ${CLIENT_PARAMS}
 
 elif [ "$ROLE" == "server" ]; then
-    tc qdisc replace dev eth0 root fq flow_limit 1000
+    tc qdisc replace dev eth0 root fq
 
     exec /usr/local/nginx/sbin/nginx -e stderr ${SERVER_PARAMS}
 fi
