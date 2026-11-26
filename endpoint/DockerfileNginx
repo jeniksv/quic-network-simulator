@@ -11,7 +11,7 @@ WORKDIR /src
 
 ARG BORINGSSL_COMMIT=427ec40cc8edc545253289232e885708c409e5ea
 ARG NGINX_COMMIT=25672181f91376190a7736f7720d543d40a7e5a9
-ARG QUICHE_COMMIT=abd8ce1139d8892b4a896be4a8933a3c9baafccc
+ARG QUICHE_COMMIT=c988fe5d10c5c6fc0281288ec01da056344b1b95
 
 RUN git init boringssl && cd boringssl \
  && git remote add origin https://github.com/google/boringssl.git \
