@@ -1,15 +1,36 @@
 [
   {
-    "name": "nginx_base",
+    "name": "nginx",
     "backend": "nginx"
   },
   {
-    "name": "quiche_base",
-    "backend": "quiche"
+    "name": "quiche_reno",
+    "backend": "quiche",
+    "quic_congestion_control": "reno"
+  },
+  {
+    "name": "quiche_cubic",
+    "backend": "quiche",
+    "quic_congestion_control": "cubic"
   },
   {
     "name": "quiche_bbr",
     "backend": "quiche",
     "quic_congestion_control": "bbr2"
+  },
+  {
+    "name": "quiche_bbr_pmtud",
+    "backend": "quiche",
+    "quic_congestion_control": "bbr2",
+    "quic_pmtud": "on",
+    "quic_max_send_udp_payload_size": "1500"
+  },
+  {
+    "name": "quiche_bbr_pmtud_32",
+    "backend": "quiche",
+    "quic_congestion_control": "bbr2",
+    "quic_pmtud": "on",
+    "quic_pmtud_pkts_between_probes": "32",
+    "quic_max_send_udp_payload_size": "1500"
   }
 ]
