@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 
 ARG BORINGSSL_COMMIT=427ec40cc8edc545253289232e885708c409e5ea
-ARG NGINX_COMMIT=c78a10b198f1c8f0c32823b08aa9feb36e240e6a
-ARG QUICHE_COMMIT=7f080177f34592763de4303135369b9027d2dca5
+ARG NGINX_COMMIT=541a2e7ca91ca4514d4d594ca90fa3c127f6ad2c
+ARG QUICHE_COMMIT=abd8ce1139d8892b4a896be4a8933a3c9baafccc
 
 RUN git init boringssl && cd boringssl \
  && git remote add origin https://github.com/google/boringssl.git \
